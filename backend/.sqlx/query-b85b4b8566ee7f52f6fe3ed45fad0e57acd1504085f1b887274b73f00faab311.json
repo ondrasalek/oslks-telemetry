@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM users WHERE role = 'superuser') as installed",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "installed",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b85b4b8566ee7f52f6fe3ed45fad0e57acd1504085f1b887274b73f00faab311"
+}

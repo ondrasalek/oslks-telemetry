@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE websites SET status = $1, last_ping_at = NOW(), updated_at = NOW() WHERE id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6dc93628b85f77c88ad47f60a066c8d5dacd2c539150c3c4382032e1e87c216"
+}

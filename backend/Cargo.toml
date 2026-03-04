@@ -1,0 +1,79 @@
+[package]
+name = "oslks-telemetry"
+version = "0.1.0"
+edition = "2021"
+authors = ["OSLKS Team"]
+description = "High-performance telemetry collector with TimescaleDB"
+
+[dependencies]
+# Web Framework
+axum = { version = "0.7", features = ["macros", "ws"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Async Runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Database
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "chrono",
+    "uuid",
+    "json",
+    "macros",
+    "migrate",
+] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error Handling
+thiserror = "1"
+anyhow = "1"
+
+# Configuration
+dotenvy = "0.15"
+
+# Session Hashing
+sha2 = "0.10"
+hex = "0.4"
+
+# GeoIP
+maxminddb = "0.24"
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# High-performance in-memory cache
+moka = { version = "0.12", features = ["future"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Auth & Sessions
+bcrypt = "0.17"
+rand = "0.8"
+tower-sessions = "0.13"
+tower-sessions-sqlx-store = { version = "0.14", features = ["postgres"] }
+
+# Email (SMTP)
+lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1-rustls-tls"] }
+html-escape = "0.2.13"
+
+
+
+
+[profile.release]
+lto = true            # Enable Link Time Optimization for better performance
+codegen-units = 1     # Sníží paměťové nároky (ale bude to trvat déle)
+opt-level = 3         # Maximální optimalizace kódu
+strip = true          # Odstraní debug symboly (menší Docker image)
+panic = "abort"
