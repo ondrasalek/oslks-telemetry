@@ -1,4 +1,4 @@
-name: Build and Push Docker Images to Gitea
+name: Build and Push Docker Images
 
 on:
     push:
@@ -11,30 +11,11 @@ on:
             - '.gitea/workflows/docker-build.yml'
 
 jobs:
-    build-and-push:
+    build-backend:
         runs-on: ubuntu-latest
-        permissions:
-            contents: read
-            packages: write
-
-        strategy:
-            matrix:
-                service: [collector, frontend]
-                include:
-                    - service: collector
-                      context: ./backend
-                      image: git.slks.cz/${{ github.repository_owner }}/oslks-collector
-                    - service: frontend
-                      context: ./frontend-react
-                      image: git.slks.cz/${{ github.repository_owner }}/oslks-frontend
-
         steps:
-            - name: Checkout repository
+            - name: Checkout
               uses: actions/checkout@v4
-
-            # Note: QEMU/Buildx setup might require specific runner configuration depending on your Gitea setup
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v3
 
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
@@ -44,19 +25,45 @@ jobs:
               with:
                   registry: git.slks.cz
                   username: ${{ github.actor }}
-                  password: ${{ github.token }}
+                  password: ${{ secrets.GITEATOKEN }}
 
-            - name: Build and push ${{ matrix.service }}
-              uses: docker/build-push-action@v5
+            - name: Build and push backend
+              uses: docker/build-push-action@v6
               with:
-                  context: ${{ matrix.context }}
+                  context: ./backend
                   platforms: linux/arm64
                   push: true
                   tags: |
-                      ${{ matrix.image }}:latest
-                      ${{ matrix.image }}:${{ github.sha }}
-                  cache-from: type=gha
-                  cache-to: type=gha,mode=max
+                      git.slks.cz/oslks/oslks-collector:latest
+                      git.slks.cz/oslks/oslks-collector:${{ github.sha }}
+                  cache-from: type=registry,ref=git.slks.cz/oslks/oslks-collector:cache
+
+    build-frontend:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Log in to Gitea Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: git.slks.cz
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITEATOKEN }}
+
+            - name: Build and push frontend
+              uses: docker/build-push-action@v6
+              with:
+                  context: ./frontend-react
+                  platforms: linux/arm64
+                  push: true
+                  tags: |
+                      git.slks.cz/oslks/oslks-frontend:latest
+                      git.slks.cz/oslks/oslks-frontend:${{ github.sha }}
+                  cache-from: type=registry,ref=git.slks.cz/oslks/oslks-frontend:cache
                   build-args: |
                       VITE_APP_URL=${{ vars.VITE_APP_URL }}
                       VITE_OSLKS_COLLECTOR_URL=${{ vars.VITE_OSLKS_COLLECTOR_URL }}
