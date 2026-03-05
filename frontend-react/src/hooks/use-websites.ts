@@ -33,6 +33,8 @@ export function useWebsite(id: string) {
             return data;
         },
         enabled: !!id,
+        retry: 6,
+        retryDelay: 800,
     });
 }
 

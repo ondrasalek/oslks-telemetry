@@ -1,0 +1,25 @@
+:80 {
+    root * /srv
+
+    encode gzip
+
+    # Suppress browser native auth dialog on 401 responses
+    header -WWW-Authenticate
+
+    # API proxy
+    handle /api/* {
+        reverse_proxy backend:8080
+    }
+
+    # Stealth telemetry collector (strip /assets/v1 prefix before proxying)
+    handle /assets/v1/* {
+        uri strip_prefix /assets/v1
+        reverse_proxy backend:8080
+    }
+
+    # Serve SPA with fallback to index.html
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+}

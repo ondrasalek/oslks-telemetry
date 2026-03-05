@@ -1,24 +1,5 @@
 services:
-    # postgresql:
-    #     image: timescale/timescaledb:latest-pg16
-    #     container_name: oslks-db
-    #     restart: always
-    #     environment:
-    #         POSTGRES_USER: $SERVICE_USER_POSTGRES
-    #         POSTGRES_PASSWORD: $SERVICE_PASSWORD_POSTGRES
-    #         POSTGRES_DB: ${POSTGRES_DB:-oslks_telemetry}
-    #     volumes:
-    #         - postgres_data:/home/postgres/pgdata/data
-    #     ports:
-    #         - '${DB_PORT:-5432}:5432'
-    #     healthcheck:
-    #         test:
-    #             ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
-    #         interval: 5s
-    #         timeout: 20s
-    #         retries: 10
-
-    # --- 2. Backend (Rust Collector) ---
+    # --- 1. Backend (Rust Collector) ---
     backend:
         image: ${IMAGE_COLLECTOR:-ghcr.io/ondrasalek/oslks-collector:latest}
         build:
@@ -27,24 +8,19 @@ services:
         container_name: oslks-backend
         restart: unless-stopped
         environment:
-            DATABASE_URL: ${DATABASE_URL:-postgres://${SERVICE_USER_POSTGRES:-user}:${SERVICE_PASSWORD_POSTGRES:-pass}@postgresql:5432/${POSTGRES_DB:-oslks_telemetry}}
+            DATABASE_URL: ${DATABASE_URL}
             HOST: 0.0.0.0
             PORT: 8080
             SESSION_SECRET: $SESSION_SECRET
             CORS_ALLOWED_ORIGINS: $CORS_ALLOWED_ORIGINS
             RUST_LOG: $RUST_LOG
-
-            # GeoIP is built into the image at /app/GeoLite2-City.mmdb
             GEOIP_DB_PATH: ${GEOIP_DB_PATH:-/app/GeoLite2-City.mmdb}
-
-            # SMTP Settings
             SMTP_HOST: $SMTP_HOST
             SMTP_PORT: $SMTP_PORT
             SMTP_USER: $SMTP_USER
             SMTP_PASSWORD: $SMTP_PASSWORD
             SMTP_FROM_EMAIL: $SMTP_FROM_EMAIL
             SMTP_FROM_NAME: $SMTP_FROM_NAME
-
         healthcheck:
             test: ['CMD', 'curl', '-f', 'http://127.0.0.1:8080/health']
             interval: 5s
@@ -53,7 +29,7 @@ services:
         networks:
             - coolify
 
-    # --- 3. Frontend (React SPA + Nginx) ---
+    # --- 2. Frontend (React SPA + Nginx) ---
     frontend:
         image: ${IMAGE_FRONTEND:-ghcr.io/ondrasalek/oslks-frontend:latest}
         build:
@@ -66,20 +42,17 @@ services:
         container_name: oslks-frontend
         restart: unless-stopped
         environment:
-            COLLECTOR_INTERNAL_URL: http://oslks-backend:8080
+            COLLECTOR_INTERNAL_URL: http://backend:8080
         depends_on:
             backend:
                 condition: service_healthy
         healthcheck:
-            test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1/']
+            test: ['CMD-SHELL', 'wget --spider -q http://127.0.0.1/ || exit 1']
             interval: 5s
             timeout: 20s
             retries: 10
         networks:
             - coolify
-
-# volumes:
-#     postgres_data:
 
 networks:
     coolify:

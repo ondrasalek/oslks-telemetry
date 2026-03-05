@@ -90,9 +90,9 @@ export function LoginPage() {
                             />
                         </div>
 
-                        {login.data?.error && (
+                        {(login.data?.error || login.error) && (
                             <p className='text-sm text-destructive'>
-                                {login.data.error}
+                                {login.data?.error ?? login.error?.message}
                             </p>
                         )}
 

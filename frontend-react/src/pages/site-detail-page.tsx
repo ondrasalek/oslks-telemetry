@@ -51,7 +51,7 @@ import type { Website } from '@/types/api';
 
 export function SiteDetailPage() {
     const { id } = useParams<{ id: string }>();
-    const { data: website, isLoading } = useWebsite(id ?? '');
+    const { data: website, isLoading, isFetching } = useWebsite(id ?? '');
     const [activeTab, setActiveTab] = useState<'overview' | 'settings'>(
         'overview',
     );
@@ -86,7 +86,7 @@ export function SiteDetailPage() {
         chartInterval,
     );
 
-    if (isLoading) {
+    if (isLoading || (isFetching && !website)) {
         return (
             <div className='space-y-6'>
                 <div className='flex items-center justify-between'>

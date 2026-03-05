@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import type {
@@ -19,10 +20,22 @@ export function useCurrentUser() {
     return useQuery<SessionUser | null>({
         queryKey: authKeys.currentUser,
         queryFn: async () => {
-            const { data } = await apiClient.get<SessionUser | null>(
-                '/api/auth/me',
-            );
-            return data;
+            try {
+                const { data } = await apiClient.get<SessionUser | null>(
+                    '/api/v1/sso/auth/me',
+                );
+                return data;
+            } catch (error: unknown) {
+                // Session expired — clear state and redirect to login
+                if (
+                    axios.isAxiosError(error) &&
+                    error.response?.status === 401 &&
+                    !window.location.pathname.startsWith('/login')
+                ) {
+                    window.location.href = '/login';
+                }
+                return null;
+            }
         },
         retry: false,
         staleTime: 5 * 60 * 1000, // 5 min
@@ -38,7 +51,7 @@ export function useLogin() {
     return useMutation<LoginResponse, Error, LoginRequest>({
         mutationFn: async (credentials) => {
             const { data } = await apiClient.post<LoginResponse>(
-                '/api/auth/login',
+                '/api/v1/sso/auth/login',
                 credentials,
             );
             return data;
@@ -57,7 +70,7 @@ export function useLogout() {
 
     return useMutation<void, Error>({
         mutationFn: async () => {
-            await apiClient.post('/api/auth/logout');
+            await apiClient.post('/api/v1/sso/auth/logout');
         },
         onSuccess: () => {
             queryClient.setQueryData(authKeys.currentUser, null);
@@ -74,7 +87,7 @@ export function useRegister() {
     return useMutation<LoginResponse, Error, RegisterRequest>({
         mutationFn: async (userData) => {
             const { data } = await apiClient.post<LoginResponse>(
-                '/api/auth/register',
+                '/api/v1/sso/auth/register',
                 userData,
             );
             return data;

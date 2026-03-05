@@ -16,18 +16,13 @@ ENV VITE_OSLKS_COLLECTOR_URL=$VITE_OSLKS_COLLECTOR_URL
 ENV VITE_OSLKS_WEBSITE_ID=$VITE_OSLKS_WEBSITE_ID
 RUN npm run build
 
-# Production stage — tiny nginx image
-FROM nginx:alpine AS runtime
+# Production stage — Caddy
+FROM caddy:alpine AS runtime
 
-# Remove default nginx config
-RUN rm /etc/nginx/conf.d/default.conf
-
-# Copy our nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy Caddy config
+COPY Caddyfile /etc/caddy/Caddyfile
 
 # Copy built static files
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /srv
 
 EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]

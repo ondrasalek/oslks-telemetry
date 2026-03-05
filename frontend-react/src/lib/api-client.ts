@@ -15,21 +15,13 @@ const apiClient = axios.create({
     },
 });
 
-// ── Response interceptor: redirect on 401 ────────────────
+// ── Response interceptor ─────────────────────────────────
+// 401 redirects are handled by ProtectedRoute via useCurrentUser, not here.
+// Redirecting on every 401 (e.g. from analytics/teams) kicks the user out
+// even when their session is still valid, causing a login loop.
 apiClient.interceptors.response.use(
     (response) => response,
-    (error) => {
-        if (
-            axios.isAxiosError(error) &&
-            error.response?.status === 401 &&
-            !window.location.pathname.startsWith('/login') &&
-            !window.location.pathname.startsWith('/invite/accept') &&
-            !window.location.pathname.startsWith('/register')
-        ) {
-            window.location.href = '/login';
-        }
-        return Promise.reject(error);
-    },
+    (error) => Promise.reject(error),
 );
 
 export default apiClient;
