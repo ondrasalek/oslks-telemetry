@@ -40,7 +40,7 @@ graph TD
 | Component | Technology | Default Port |
 |:---|:---|:---|
 | **Collector** (Backend) | Rust, Axum, SQLx, Moka cache | `8080` |
-| **Dashboard** (Frontend) | React, TypeScript, Vite, Shadcn UI, Nginx | `3000` |
+| **Dashboard** (Frontend) | React, TypeScript, Vite, Shadcn UI, Caddy | `3000` |
 | **Database** | TimescaleDB (PostgreSQL 16) | `5432` |
 
 ---
@@ -162,9 +162,9 @@ The easiest way to get started is using Docker Compose.
 ### Pull Docker images
 
 ```bash
-# Pull the latest images
-docker pull ghcr.io/ondrasalek/oslks-collector:latest
-docker pull ghcr.io/ondrasalek/oslks-frontend:latest
+# Pull the latest images from the self-hosted Gitea registry
+docker pull git.slks.cz/oslks/oslks-collector:latest
+docker pull git.slks.cz/oslks/oslks-frontend:latest
 ```
 
 ### Docker Compose
@@ -187,8 +187,8 @@ docker compose up -d --build
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/oslks-radar.git
-cd oslks-radar
+git clone https://github.com/ondrasalek/oslks-telemetry.git
+cd oslks-telemetry
 ```
 
 ### 2. Environment Setup
@@ -207,6 +207,8 @@ Key variables:
 | `CORS_ALLOWED_ORIGINS` | ❌ | `*` (mirror) | Comma-separated allowed origins |
 | `GEOIP_DB_PATH` | ❌ | — | Path to MaxMind GeoLite2-City.mmdb |
 | `VITE_APP_URL` | ❌ | `http://localhost:5173` | Public Dashboard URL (Required for exact tracker script generation in production, e.g. `https://radar.example.com`) |
+| `VITE_OSLKS_COLLECTOR_URL` | ❌ | — | Self-tracking: URL of the collector to send dashboard's own analytics to |
+| `VITE_OSLKS_WEBSITE_ID` | ❌ | — | Self-tracking: Website UUID from the dashboard for tracking dashboard usage |
 
 ### 3. Run with Docker Compose
 
@@ -252,8 +254,8 @@ docker compose up -d --build
 │   │   ├── lib/            # API client, utilities
 │   │   ├── types/          # TypeScript API interfaces
 │   │   └── App.tsx         # Router + providers
-│   ├── nginx.conf          # Production Nginx config (SPA + API proxy)
-│   └── Dockerfile          # Node build → Nginx runtime
+│   ├── Caddyfile           # Production Caddy config (SPA + API proxy)
+│   └── Dockerfile          # Node build → Caddy runtime
 ├── docker-compose.yml      # Full-stack orchestration
 ├── .env.example            # Environment template
 └── README.md

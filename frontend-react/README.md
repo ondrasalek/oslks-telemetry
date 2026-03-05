@@ -66,7 +66,7 @@ src/
 
 ## 🚢 Production Deployment
 
-The frontend is built as a static site and served via Nginx in the provided Docker configuration.
+The frontend is built as a static site and served via Caddy in the provided Docker configuration.
 
 ```bash
 npm run build
