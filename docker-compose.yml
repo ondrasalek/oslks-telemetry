@@ -1,5 +1,28 @@
 services:
-    # --- 1. Backend (Rust Collector) ---
+    # --- 1. Database (TimescaleDB) ---
+    db:
+        image: timescale/timescaledb:latest-pg16
+        container_name: oslks-db
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: ${POSTGRES_DB:-oslks}
+            POSTGRES_USER: ${POSTGRES_USER:-postgres}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-oslks}',
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+        networks:
+            - coolify
+
+    # --- 2. Backend (Rust Collector) ---
     backend:
         image: ${IMAGE_COLLECTOR:-ghcr.io/ondrasalek/oslks-collector:latest}
         build:
@@ -21,6 +44,10 @@ services:
             SMTP_PASSWORD: $SMTP_PASSWORD
             SMTP_FROM_EMAIL: $SMTP_FROM_EMAIL
             SMTP_FROM_NAME: $SMTP_FROM_NAME
+        depends_on:
+            db:
+                condition: service_healthy
+
         healthcheck:
             test: ['CMD', 'curl', '-f', 'http://127.0.0.1:8080/health']
             interval: 5s
@@ -29,7 +56,7 @@ services:
         networks:
             - coolify
 
-    # --- 2. Frontend (React SPA + Nginx) ---
+    # --- 2. Frontend (React SPA) ---
     frontend:
         image: ${IMAGE_FRONTEND:-ghcr.io/ondrasalek/oslks-frontend:latest}
         build:
@@ -63,6 +90,9 @@ services:
             - 'traefik.http.services.oslks-frontend.loadbalancer.server.port=80'
         networks:
             - coolify
+
+volumes:
+    postgres_data:
 
 networks:
     coolify:
