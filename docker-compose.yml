@@ -51,6 +51,16 @@ services:
             interval: 5s
             timeout: 20s
             retries: 10
+        labels:
+            - 'traefik.enable=true'
+            - 'traefik.http.routers.oslks-frontend.rule=Host(`${FQDN:-radar.slks.cz}`)'
+            - 'traefik.http.routers.oslks-frontend.entrypoints=websecure'
+            - 'traefik.http.routers.oslks-frontend.tls.certresolver=letsencrypt'
+            - 'traefik.http.routers.oslks-frontend.middlewares='
+            - 'traefik.http.routers.oslks-frontend-http.rule=Host(`${FQDN:-radar.slks.cz}`)'
+            - 'traefik.http.routers.oslks-frontend-http.entrypoints=web'
+            - 'traefik.http.routers.oslks-frontend-http.middlewares='
+            - 'traefik.http.services.oslks-frontend.loadbalancer.server.port=80'
         networks:
             - coolify
 
