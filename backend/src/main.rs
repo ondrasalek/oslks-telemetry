@@ -200,12 +200,14 @@ async fn main() -> Result<()> {
 
     // Build the router with state
     let app = Router::new()
-        // Collector endpoint (direct)
+        // Collector endpoint (direct + stealth)
         .route("/v1/p", post(collect))
+        .route("/assets/v1/v1/p", post(collect))
         // WebSocket endpoint
         .route("/ws", get(ws_handler))
-        // Script serving (direct)
+        // Script serving (direct + stealth)
         .route("/lib/j", get(get_script))
+        .route("/assets/v1/lib/j", get(get_script))
         // Health check endpoints (consolidating under /api for dashboard)
         .route("/health", get(health))
         .route("/api/health", get(health_detailed))
@@ -214,9 +216,10 @@ async fn main() -> Result<()> {
         // Add middleware
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        // Normalize paths (fixes 404s on trailing slashes) - must be a layer on Router
-        .layer(NormalizePathLayer::trim_trailing_slash())
-        .with_state(state);
+        // Add state
+        .with_state(state)
+        // Normalize paths (fixes 404s on trailing slashes) - must be the OUTERMOST layer
+        .layer(NormalizePathLayer::trim_trailing_slash());
 
     // Parse bind address
     let addr: SocketAddr = config
