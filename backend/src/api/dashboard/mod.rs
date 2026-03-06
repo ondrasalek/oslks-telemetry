@@ -25,7 +25,7 @@ pub fn router(pool: PgPool) -> Router<crate::api::AppState> {
         .map(|v| v != "true")
         .unwrap_or(true); // Default to secure in all environments unless explicitly disabled
 
-    let session_layer = SessionManagerLayer::new(session_store)
+    let session_layer = SessionManagerLayer::new(session_store.clone())
         .with_secure(secure_cookies)
         .with_same_site(tower_sessions::cookie::SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(Duration::days(7)));
