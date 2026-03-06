@@ -9,7 +9,7 @@ description = "High-performance telemetry collector with TimescaleDB"
 # Web Framework
 axum = { version = "0.7", features = ["macros", "ws"] }
 tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "normalize-path"] }
 
 # Async Runtime
 tokio = { version = "1", features = ["full"] }

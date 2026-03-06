@@ -16,7 +16,6 @@ use tower_http::{
     normalize_path::NormalizePathLayer,
     trace::TraceLayer,
 };
-use tower::ServiceBuilder;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod api;
@@ -199,7 +198,7 @@ async fn main() -> Result<()> {
         pinger::start_pinger(pinger_pool).await;
     });
 
-    // Build the router
+    // Build the router with state
     let app = Router::new()
         // Collector endpoint (direct)
         .route("/v1/p", post(collect))
@@ -214,15 +213,10 @@ async fn main() -> Result<()> {
         .nest("/api", dashboard_router)
         // Add middleware
         .layer(cors)
-        .layer(TraceLayer::new_for_http());
-
-    // Service builder with normalization layer (fixes 404s on trailing slashes)
-    let app = ServiceBuilder::new()
+        .layer(TraceLayer::new_for_http())
+        // Normalize paths (fixes 404s on trailing slashes) - must be a layer on Router
         .layer(NormalizePathLayer::trim_trailing_slash())
-        .service(app);
-
-    // Add state to the service wrapper
-    let app = app.with_state(state);
+        .with_state(state);
 
     // Parse bind address
     let addr: SocketAddr = config

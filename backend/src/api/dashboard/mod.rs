@@ -1,7 +1,7 @@
 //! Dashboard API router module
 
 use axum::Router;
-use tower_sessions::{cookie::time::Duration, Expiry, SessionManagerLayer};
+use tower_sessions::{cookie::time::Duration, ExpiredDeletion, Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use sqlx::PgPool;
 
