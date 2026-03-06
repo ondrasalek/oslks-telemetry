@@ -13,8 +13,10 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::broadcast;
 use tower_http::{
     cors::{AllowOrigin, CorsLayer},
+    normalize_path::NormalizePathLayer,
     trace::TraceLayer,
 };
+use tower::ServiceBuilder;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod api;
@@ -199,24 +201,28 @@ async fn main() -> Result<()> {
 
     // Build the router
     let app = Router::new()
-        // Collector endpoint (direct + stealth prefix)
+        // Collector endpoint (direct)
         .route("/v1/p", post(collect))
-        .route("/assets/v1/v1/p", post(collect))
         // WebSocket endpoint
         .route("/ws", get(ws_handler))
-        // Script serving (direct + stealth prefix)
+        // Script serving (direct)
         .route("/lib/j", get(get_script))
-        .route("/assets/v1/lib/j", get(get_script))
-        // Health check endpoints
+        // Health check endpoints (consolidating under /api for dashboard)
         .route("/health", get(health))
         .route("/api/health", get(health_detailed))
         // Dashboard API routes
         .nest("/api", dashboard_router)
         // Add middleware
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
-        // Add state
-        .with_state(state);
+        .layer(TraceLayer::new_for_http());
+
+    // Service builder with normalization layer (fixes 404s on trailing slashes)
+    let app = ServiceBuilder::new()
+        .layer(NormalizePathLayer::trim_trailing_slash())
+        .service(app);
+
+    // Add state to the service wrapper
+    let app = app.with_state(state);
 
     // Parse bind address
     let addr: SocketAddr = config

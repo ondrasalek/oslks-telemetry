@@ -20,19 +20,22 @@ pub fn router(pool: PgPool) -> Router<crate::api::AppState> {
     // Session layer (requires 'sessions' table in Postgres space)
     let session_store = PostgresStore::new(pool);
         
+    // Environment-aware session security
+    let secure_cookies = std::env::var("SESSION_COOKIE_INSECURE")
+        .map(|v| v != "true")
+        .unwrap_or(true); // Default to secure in all environments unless explicitly disabled
+
     let session_layer = SessionManagerLayer::new(session_store)
-        .with_secure(!cfg!(debug_assertions)) // Secure in release, false in dev
+        .with_secure(secure_cookies)
         .with_same_site(tower_sessions::cookie::SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(Duration::days(7)));
 
     // Background task to clean up expired sessions
-    /*
     tokio::task::spawn(
         session_store
             .clone()
             .continuously_delete_expired(tokio::time::Duration::from_secs(60 * 60)),
     );
-    */
 
     Router::new()
         .nest("/v1/sso/auth", auth::router())
