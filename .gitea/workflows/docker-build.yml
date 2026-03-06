@@ -37,7 +37,7 @@ jobs:
                       git.slks.cz/oslks/oslks-collector:latest
                       git.slks.cz/oslks/oslks-collector:${{ github.sha }}
                   cache-from: type=gha
-                  cache-to: type=gha,mode=max
+                  cache-to: type=inline
 
             - name: Build and push frontend
               uses: docker/build-push-action@v6
@@ -52,4 +52,4 @@ jobs:
                       VITE_OSLKS_COLLECTOR_URL=${{ secrets.VITE_OSLKS_COLLECTOR_URL || vars.VITE_OSLKS_COLLECTOR_URL || 'https://radar.slks.cz' }}
                       VITE_OSLKS_WEBSITE_ID=${{ secrets.VITE_OSLKS_WEBSITE_ID || vars.VITE_OSLKS_WEBSITE_ID || 'default' }}
                   cache-from: type=gha
-                  cache-to: type=gha,mode=max
+                  cache-to: type=inline
