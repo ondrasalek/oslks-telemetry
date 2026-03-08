@@ -20,8 +20,19 @@ const apiClient = axios.create({
 // Redirecting on every 401 (e.g. from analytics/teams) kicks the user out
 // even when their session is still valid, causing a login loop.
 apiClient.interceptors.response.use(
-    (response) => response,
-    (error) => Promise.reject(error),
+    (response) => {
+        return response;
+    },
+    (error) => {
+        if (axios.isAxiosError(error)) {
+            console.error(
+                `[API Error] ${error.config?.method?.toUpperCase()} ${error.config?.url}:`,
+                error.response?.status,
+                error.response?.data || error.message,
+            );
+        }
+        return Promise.reject(error);
+    },
 );
 
 export default apiClient;

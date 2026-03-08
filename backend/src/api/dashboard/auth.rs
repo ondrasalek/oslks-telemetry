@@ -3,6 +3,8 @@
 use axum::{
     extract::State,
     routing::{get, post},
+    http::StatusCode,
+    response::IntoResponse,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -48,32 +50,41 @@ async fn login(
     State(state): State<AppState>,
     session: Session,
     Json(payload): Json<LoginRequest>,
-) -> Json<LoginResponse> {
+) -> impl IntoResponse {
     match authenticate(&payload.email, &payload.password, &state.pool).await {
         Ok(user) => {
             // Store user in session
             if let Err(e) = set_session_user(&session, user.clone()).await {
                 let err: tower_sessions::session::Error = e;
-                return Json(LoginResponse {
-                    success: false,
-                    user: None,
-                    error: Some(err.to_string()),
-                });
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(LoginResponse {
+                        success: false,
+                        user: None,
+                        error: Some(err.to_string()),
+                    }),
+                ).into_response();
             }
 
-            Json(LoginResponse {
-                success: true,
-                user: Some(user),
-                error: None,
-            })
+            (
+                StatusCode::OK,
+                Json(LoginResponse {
+                    success: true,
+                    user: Some(user),
+                    error: None,
+                }),
+            ).into_response()
         }
         Err(e) => {
             let err: anyhow::Error = e;
-            Json(LoginResponse {
-                success: false,
-                user: None,
-                error: Some(err.to_string()),
-            })
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(LoginResponse {
+                    success: false,
+                    user: None,
+                    error: Some(err.to_string()),
+                }),
+            ).into_response()
         },
     }
 }
@@ -82,7 +93,7 @@ async fn register(
     State(state): State<AppState>,
     session: Session,
     Json(payload): Json<RegisterRequest>,
-) -> Json<LoginResponse> {
+) -> impl IntoResponse {
     // 1. Check if user already exists
     let existing: bool = match sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
         .bind(&payload.email)
@@ -90,17 +101,17 @@ async fn register(
         .await
     {
         Ok(e) => e,
-        Err(e) => return Json(LoginResponse { success: false, user: None, error: Some(e.to_string()) }),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(LoginResponse { success: false, user: None, error: Some(e.to_string()) })).into_response(),
     };
 
     if existing {
-        return Json(LoginResponse { success: false, user: None, error: Some("Email already in use".to_string()) });
+        return (StatusCode::CONFLICT, Json(LoginResponse { success: false, user: None, error: Some("Email already in use".to_string()) })).into_response();
     }
 
     // 2. Hash password
     let password_hash = match crate::auth::hash_password(&payload.password) {
         Ok(h) => h,
-        Err(e) => return Json(LoginResponse { success: false, user: None, error: Some(e.to_string()) }),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(LoginResponse { success: false, user: None, error: Some(e.to_string()) })).into_response(),
     };
 
     let user_id = uuid::Uuid::new_v4();
@@ -116,7 +127,7 @@ async fn register(
     .execute(&state.pool)
     .await
     {
-        return Json(LoginResponse { success: false, user: None, error: Some(e.to_string()) });
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(LoginResponse { success: false, user: None, error: Some(e.to_string()) })).into_response();
     }
 
     let user = SessionUser {
@@ -130,7 +141,7 @@ async fn register(
 
     // 4. Set session
     if let Err(e) = set_session_user(&session, user.clone()).await {
-        return Json(LoginResponse { success: false, user: None, error: Some(e.to_string()) });
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(LoginResponse { success: false, user: None, error: Some(e.to_string()) })).into_response();
     }
 
     // 5. Send welcome email (fire and forget/non-blocking)
@@ -144,11 +155,14 @@ async fn register(
         }
     });
 
-    Json(LoginResponse {
-        success: true,
-        user: Some(user),
-        error: None,
-    })
+    (
+        StatusCode::CREATED,
+        Json(LoginResponse {
+            success: true,
+            user: Some(user),
+            error: None,
+        }),
+    ).into_response()
 }
 
 async fn logout(session: Session) -> impl axum::response::IntoResponse {

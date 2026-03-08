@@ -215,7 +215,15 @@ async fn main() -> Result<()> {
         .nest("/api", dashboard_router)
         // Add middleware
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .on_request(|request: &axum::http::Request<_>, _span: &tracing::Span| {
+                    tracing::info!("request: {} {}", request.method(), request.uri());
+                })
+                .on_response(|response: &axum::http::Response<_>, latency: std::time::Duration, _span: &tracing::Span| {
+                    tracing::info!("response: status={}, latency={:?}", response.status(), latency);
+                })
+        )
         // Add state
         .with_state(state)
         // Normalize paths (fixes 404s on trailing slashes) - must be the OUTERMOST layer

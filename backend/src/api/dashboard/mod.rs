@@ -21,9 +21,15 @@ pub fn router(pool: PgPool) -> Router<crate::api::AppState> {
     let session_store = PostgresStore::new(pool);
         
     // Environment-aware session security
+    // Default to true (secure) except when explicitly disabled for HTTP environments
     let secure_cookies = std::env::var("SESSION_COOKIE_INSECURE")
         .map(|v| v != "true")
-        .unwrap_or(true); // Default to secure in all environments unless explicitly disabled
+        .unwrap_or(true); 
+
+    tracing::info!(
+        "Initializing SessionManagerLayer: secure={}, same_site=Lax, expiry=7 days",
+        secure_cookies
+    );
 
     let session_layer = SessionManagerLayer::new(session_store.clone())
         .with_secure(secure_cookies)
