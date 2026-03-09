@@ -3,9 +3,9 @@
 
     encode gzip
 
-    # API proxy
+    # API proxy (Node.js Dashboard)
     handle /api/* {
-        reverse_proxy backend:8080 {
+        reverse_proxy dashboard-api:8081 {
             header_down -WWW-Authenticate
         }
     }

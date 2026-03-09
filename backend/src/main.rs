@@ -226,7 +226,11 @@ async fn main() -> Result<()> {
         )
         // Add state
         .with_state(state)
-        // Normalize paths (fixes 404s on trailing slashes) - must be the OUTERMOST layer
+        // Fallback for 404 debugging
+        .fallback(|method: axum::http::Method, uri: axum::http::Uri| async move {
+            tracing::warn!("Unhandled request: {} {}", method, uri);
+            (axum::http::StatusCode::NOT_FOUND, "Not Found")
+        })
         .layer(NormalizePathLayer::trim_trailing_slash());
 
     // Parse bind address

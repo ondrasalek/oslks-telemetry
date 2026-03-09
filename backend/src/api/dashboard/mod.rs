@@ -44,7 +44,7 @@ pub fn router(pool: PgPool) -> Router<crate::api::AppState> {
     );
 
     Router::new()
-        .nest("/v1/sso/auth", auth::router())
+        .nest("/auth", auth::router())
         .nest("/analytics", analytics::router())
         .nest("/websites", websites::router())
         .nest("/teams", teams::router())

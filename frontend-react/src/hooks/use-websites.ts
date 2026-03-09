@@ -74,13 +74,11 @@ export function useAddWebsite() {
 
     return useMutation<Website, Error, { domain: string; name?: string }>({
         mutationFn: async (payload) => {
-            // Note: The new backend uses 'domain' instead of 'url', and returns JSON Result<Website, String> wrapped
-            const { data } = await apiClient.post<{
-                Ok?: Website;
-                Err?: string;
-            }>('/api/websites', payload);
-            if (data.Err) throw new Error(data.Err);
-            return data.Ok!;
+            const { data } = await apiClient.post<Website>(
+                '/api/websites',
+                payload,
+            );
+            return data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: websiteKeys.all });

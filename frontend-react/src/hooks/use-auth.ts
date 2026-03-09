@@ -22,7 +22,7 @@ export function useCurrentUser() {
         queryFn: async () => {
             try {
                 const { data } = await apiClient.get<SessionUser | null>(
-                    '/api/v1/sso/auth/me',
+                    '/api/auth/me',
                 );
                 return data;
             } catch (error: unknown) {
@@ -51,7 +51,7 @@ export function useLogin() {
     return useMutation<LoginResponse, Error, LoginRequest>({
         mutationFn: async (credentials) => {
             const { data } = await apiClient.post<LoginResponse>(
-                '/api/v1/sso/auth/login',
+                '/api/auth/login',
                 credentials,
             );
             return data;
@@ -70,7 +70,7 @@ export function useLogout() {
 
     return useMutation<void, Error>({
         mutationFn: async () => {
-            await apiClient.post('/api/v1/sso/auth/logout');
+            await apiClient.post('/api/auth/logout');
         },
         onSuccess: () => {
             queryClient.setQueryData(authKeys.currentUser, null);
@@ -87,7 +87,7 @@ export function useRegister() {
     return useMutation<LoginResponse, Error, RegisterRequest>({
         mutationFn: async (userData) => {
             const { data } = await apiClient.post<LoginResponse>(
-                '/api/v1/sso/auth/register',
+                '/api/auth/register',
                 userData,
             );
             return data;
