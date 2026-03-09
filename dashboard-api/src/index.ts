@@ -12,6 +12,19 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 8081;
+
+if (!process.env.DATABASE_URL) {
+    console.error(
+        'FATAL: DATABASE_URL is not defined in environment variables.',
+    );
+    process.exit(1);
+}
+
+console.log('Starting Dashboard API...');
+console.log(`Port: ${port}`);
+console.log(
+    `Database URL (masked): ${process.env.DATABASE_URL.replace(/:[^:@]+@/, ':****@')}`,
+);
 const PgSession = connectPg(session);
 
 // Trust proxy for secure cookies over HTTPS (Caddy)
@@ -55,8 +68,21 @@ app.use('/api/websites', websiteRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 // Health check
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', service: 'dashboard-api' });
+app.get('/health', async (req, res) => {
+    try {
+        await sql`SELECT 1`;
+        res.json({
+            status: 'ok',
+            service: 'dashboard-api',
+            database: 'connected',
+        });
+    } catch (error) {
+        res.status(503).json({
+            status: 'error',
+            service: 'dashboard-api',
+            database: 'disconnected',
+        });
+    }
 });
 
 app.get('/api/users/count', async (req, res) => {
