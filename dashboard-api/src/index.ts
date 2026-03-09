@@ -27,14 +27,16 @@ console.log(
 );
 const PgSession = connectPg(session);
 
-// Trust proxy for secure cookies over HTTPS (Caddy)
-app.set('trust proxy', 1);
+// Trust proxy correctly for multi-hop proxy chains (Traefik -> Caddy -> Node)
+app.set('trust proxy', true);
 
 app.use(
     cors({
-        origin:
-            process.env.CORS_ALLOWED_ORIGINS?.split(',') ||
-            'http://localhost:5173',
+        origin: (origin, callback) => {
+            // Log origin to help debug CORS issues
+            console.log(`[CORS] Request from origin: ${origin}`);
+            callback(null, true); // Allow all for now during debugging
+        },
         credentials: true,
     }),
 );
@@ -42,25 +44,39 @@ app.use(
 app.use(express.json());
 
 // Session management
+const sessionStore = new PgSession({
+    conString: process.env.DATABASE_URL,
+    tableName: 'app_sessions',
+    createTableIfMissing: true,
+});
+
+sessionStore.on('error', (err) => {
+    console.error('[SessionStore] Database error:', err);
+});
+
 app.use(
     session({
-        store: new PgSession({
-            conString: process.env.DATABASE_URL,
-            tableName: 'app_sessions',
-            createTableIfMissing: true,
-        }),
+        store: sessionStore,
         secret: process.env.SESSION_SECRET || 'local_dev_secret_key_change_me',
         resave: false,
         saveUninitialized: false,
         name: 'oslks_session',
         cookie: {
-            secure: process.env.NODE_ENV === 'production',
+            secure: true, // Always true since we are behind Traefik HTTPS
             httpOnly: true,
             sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         },
     }),
 );
+
+// Logging middleware
+app.use((req, res, next) => {
+    console.log(
+        `[HTTP] ${req.method} ${req.url} (SessionID: ${req.sessionID}, UserID: ${(req.session as any).userId})`,
+    );
+    next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -77,6 +93,7 @@ app.get('/health', async (req, res) => {
             database: 'connected',
         });
     } catch (error) {
+        console.error('[Health] Check failed:', error);
         res.status(503).json({
             status: 'error',
             service: 'dashboard-api',
@@ -94,6 +111,6 @@ app.get('/api/users/count', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Dashboard API listening on port ${port}`);
+app.listen(Number(port), '0.0.0.0', () => {
+    console.log(`Dashboard API listening on port ${port} (on 0.0.0.0)`);
 });
