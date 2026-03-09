@@ -20,14 +20,21 @@ export const getStats = async (req: Request, res: Response) => {
 
     try {
         // Basic permission check
+        console.log(
+            `[Analytics] Fetching stats for website ${website_id} (User: ${userId})`,
+        );
         const websitesData = await sql`
             SELECT 1 FROM websites w
             JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id} AND tm.user_id = ${userId}
+            WHERE w.id = ${website_id}::uuid AND tm.user_id = ${userId}::uuid
             LIMIT 1
         `;
-        if (websitesData.length === 0)
+        if (websitesData.length === 0) {
+            console.warn(
+                `[Analytics] Permission denied or website not found: ${website_id} for user ${userId}`,
+            );
             return res.status(404).json({ error: 'Website not found' });
+        }
 
         const stats = await sql`
             SELECT 
@@ -37,7 +44,7 @@ export const getStats = async (req: Request, res: Response) => {
                 0::float as bounce_rate,
                 0::float as avg_duration
             FROM events
-            WHERE website_id = ${website_id}
+            WHERE website_id = ${website_id}::uuid
               AND (${(start_at as string) || null}::timestamptz IS NULL OR created_at >= ${(start_at as string) || null}::timestamptz)
               AND (${(end_at as string) || null}::timestamptz IS NULL OR created_at <= ${(end_at as string) || null}::timestamptz)
               AND (${(url as string) || null}::text IS NULL OR url = ${(url as string) || null}::text)
@@ -48,6 +55,7 @@ export const getStats = async (req: Request, res: Response) => {
               AND (${(country as string) || null}::text IS NULL OR country = ${(country as string) || null}::text)
               AND (${(event_name as string) || null}::text IS NULL OR event_name = ${(event_name as string) || null}::text)
         `;
+        console.log(`[Analytics] Stats result: ${JSON.stringify(stats[0])}`);
 
         res.json(stats[0]);
     } catch (error) {

@@ -63,7 +63,11 @@ services:
             PORT: 8081
             NODE_ENV: production
         healthcheck:
-            test: ['CMD', 'curl', '-f', 'http://127.0.0.1:8081/health']
+            test:
+                [
+                    'CMD-SHELL',
+                    'wget -qO- http://localhost:8081/health || exit 1',
+                ]
             interval: 10s
             timeout: 5s
             retries: 5

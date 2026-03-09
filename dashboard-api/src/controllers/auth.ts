@@ -4,6 +4,7 @@ import sql from '../lib/db.js';
 
 export const login = async (req: Request, res: Response) => {
     const { email, password } = req.body;
+    console.log(`Login attempt for: ${email}`);
 
     try {
         const users = await sql`
@@ -15,6 +16,9 @@ export const login = async (req: Request, res: Response) => {
         const user = users[0];
 
         if (!user || !user.password) {
+            console.warn(
+                `Login failed: user not found or no password for ${email}`,
+            );
             return res
                 .status(401)
                 .json({ success: false, error: 'Invalid credentials' });
@@ -22,6 +26,7 @@ export const login = async (req: Request, res: Response) => {
 
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
+            console.warn(`Login failed: invalid password for ${email}`);
             return res
                 .status(401)
                 .json({ success: false, error: 'Invalid credentials' });
@@ -31,13 +36,16 @@ export const login = async (req: Request, res: Response) => {
         const memberships = await sql`
             SELECT team_id, role
             FROM team_members
-            WHERE user_id = ${user.id}
+            WHERE user_id = ${user.id}::uuid
             LIMIT 1
         `;
         const membership = memberships[0];
 
         // Store user in session
         (req.session as any).userId = user.id;
+        console.log(
+            `Successfully logged in user ${user.id}. Session ID: ${req.sessionID}`,
+        );
 
         const sessionUser = {
             id: user.id as string,
@@ -60,6 +68,7 @@ export const login = async (req: Request, res: Response) => {
 
 export const register = async (req: Request, res: Response) => {
     const { name, email, password } = req.body;
+    console.log(`Registration attempt for: ${email}`);
 
     try {
         const existing = await sql`SELECT id FROM users WHERE email = ${email}`;
@@ -71,17 +80,40 @@ export const register = async (req: Request, res: Response) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const [user] = await sql`
-            INSERT INTO users (name, email, password, role)
-            VALUES (${name as string | null}, ${email as string}, ${hashedPassword as string}, 'user')
-            RETURNING id, email, name, role
-        `;
+        // Use a transaction for registration
+        const result = await sql.begin(async (tx: any) => {
+            const [user] = await tx`
+                INSERT INTO users (name, email, password, role)
+                VALUES (${name as string | null}, ${email as string}, ${hashedPassword as string}, 'user')
+                RETURNING id, email, name, role
+            `;
+
+            // Create a default "Personal" team for the user
+            const [team] = await tx`
+                INSERT INTO teams (name)
+                VALUES ('Personal')
+                RETURNING id
+            `;
+
+            // Make the user the owner of the team
+            await tx`
+                INSERT INTO team_members (team_id, user_id, role)
+                VALUES (${team.id}::uuid, ${user.id}::uuid, 'owner')
+            `;
+
+            return { user, teamId: team.id };
+        });
+
+        const { user, teamId } = result;
 
         if (!user) {
             throw new Error('Failed to create user');
         }
 
         (req.session as any).userId = user.id;
+        console.log(
+            `Registered and logged in user ${user.id}. Created personal team ${teamId}`,
+        );
 
         res.status(201).json({
             success: true,
@@ -90,8 +122,8 @@ export const register = async (req: Request, res: Response) => {
                 email: user.email as string,
                 name: user.name as string | null,
                 role: user.role as string,
-                teamId: null,
-                teamRole: null,
+                teamId: teamId as string,
+                teamRole: 'owner',
             },
         });
     } catch (error) {
@@ -110,7 +142,7 @@ export const logout = (req: Request, res: Response) => {
                 .status(500)
                 .json({ success: false, error: 'Failed to logout' });
         }
-        res.clearCookie('connect.sid');
+        res.clearCookie('oslks_session');
         res.json({ success: true });
     });
 };
@@ -119,6 +151,7 @@ export const me = async (req: Request, res: Response) => {
     const userId = (req.session as any).userId;
 
     if (!userId) {
+        console.log('Auth check (me): No userId in session');
         return res.json(null);
     }
 
@@ -126,22 +159,27 @@ export const me = async (req: Request, res: Response) => {
         const users = await sql`
             SELECT id, email, name, role 
             FROM users 
-            WHERE id = ${userId}
+            WHERE id = ${userId}::uuid
             LIMIT 1
         `;
         const user = users[0];
 
         if (!user) {
+            console.warn(`Auth check (me): User ${userId} not found in DB`);
             return res.json(null);
         }
 
         const memberships = await sql`
             SELECT team_id, role
             FROM team_members
-            WHERE user_id = ${user.id}
+            WHERE user_id = ${user.id}::uuid
             LIMIT 1
         `;
         const membership = memberships[0];
+
+        console.log(
+            `Auth check (me): Authenticated user ${user.id} (Email: ${user.email})`,
+        );
 
         res.json({
             id: user.id,
@@ -152,6 +190,7 @@ export const me = async (req: Request, res: Response) => {
             teamRole: membership?.role || null,
         });
     } catch (error) {
+        console.error('Auth check (me) error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

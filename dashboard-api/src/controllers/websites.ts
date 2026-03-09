@@ -6,14 +6,18 @@ export const listWebsites = async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
+        console.log(`[Websites] Listing websites for user ${userId}`);
         const websites = await sql`
             SELECT w.* 
             FROM websites w
             JOIN teams t ON w.team_id = t.id
             JOIN team_members tm ON t.id = tm.team_id
-            WHERE tm.user_id = ${userId}
+            WHERE tm.user_id = ${userId}::uuid
             ORDER BY w.created_at DESC
         `;
+        console.log(
+            `[Websites] Found ${websites.length} websites for user ${userId}`,
+        );
         res.json(websites);
     } catch (error) {
         console.error('List websites error:', error);
@@ -59,12 +63,13 @@ export const getWebsite = async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
+        console.log(`[Websites] Fetching website ${id} for user ${userId}`);
         const websites = await sql`
             SELECT w.* 
             FROM websites w
             JOIN teams t ON w.team_id = t.id
             JOIN team_members tm ON t.id = tm.team_id
-            WHERE w.id = ${id as string} AND tm.user_id = ${userId}
+            WHERE w.id = ${id as string}::uuid AND tm.user_id = ${userId}::uuid
             LIMIT 1
         `;
         const website = websites[0];
