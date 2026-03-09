@@ -52,12 +52,8 @@ services:
         networks:
             - coolify
 
-    # --- 3. Dashboard API (Node.js) ---
     dashboard-api:
         image: 'git.slks.cz/oslks/oslks-dashboard-api:latest'
-        build:
-            context: ./dashboard-api
-            dockerfile: Dockerfile
         container_name: oslks-dashboard-api
         restart: unless-stopped
         environment:
@@ -66,9 +62,6 @@ services:
             CORS_ALLOWED_ORIGINS: '${CORS_ALLOWED_ORIGINS}'
             PORT: 8081
             NODE_ENV: production
-        depends_on:
-            db:
-                condition: service_healthy
         networks:
             - coolify
 
