@@ -6,6 +6,7 @@ on:
             - main
         paths:
             - 'backend/**'
+            - 'dashboard-api/**'
             - 'frontend-react/**'
             - 'docker-compose.yml'
             - '.gitea/workflows/docker-build.yml'
@@ -36,6 +37,17 @@ jobs:
                   tags: |
                       git.slks.cz/oslks/oslks-collector:latest
                       git.slks.cz/oslks/oslks-collector:${{ github.sha }}
+                  cache-from: type=gha
+                  cache-to: type=inline
+
+            - name: Build and push dashboard-api
+              uses: docker/build-push-action@v6
+              with:
+                  context: ./dashboard-api
+                  push: true
+                  tags: |
+                      git.slks.cz/oslks/oslks-dashboard-api:latest
+                      git.slks.cz/oslks/oslks-dashboard-api:${{ github.sha }}
                   cache-from: type=gha
                   cache-to: type=inline
 
