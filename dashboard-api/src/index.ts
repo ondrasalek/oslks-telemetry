@@ -8,7 +8,8 @@ import websiteRoutes from './routes/websites.js';
 import analyticsRoutes from './routes/analytics.js';
 import sql from './lib/db.js';
 
-dotenv.config();
+// Only load .env if variables aren't already set by the environment (like Docker Compose)
+dotenv.config({ override: false });
 
 const app = express();
 const port = process.env.PORT || 8081;
