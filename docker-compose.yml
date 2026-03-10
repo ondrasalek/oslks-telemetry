@@ -56,6 +56,9 @@ services:
         image: 'git.slks.cz/oslks/oslks-dashboard-api:latest'
         container_name: oslks-dashboard-api
         restart: unless-stopped
+        depends_on:
+            backend:
+                condition: service_healthy
         environment:
             DATABASE_URL: '${DATABASE_URL}'
             SESSION_SECRET: '${SESSION_SECRET}'
