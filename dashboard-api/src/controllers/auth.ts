@@ -52,8 +52,8 @@ export const login = async (req: Request, res: Response) => {
             email: user.email as string,
             name: user.name as string | null,
             role: user.role as string,
-            teamId: membership?.team_id || null,
-            teamRole: membership?.role || null,
+            team_id: membership?.team_id || null,
+            team_role: membership?.role || null,
         };
 
         res.json({ success: true, user: sessionUser });
@@ -122,8 +122,8 @@ export const register = async (req: Request, res: Response) => {
                 email: user.email as string,
                 name: user.name as string | null,
                 role: user.role as string,
-                teamId: teamId as string,
-                teamRole: 'owner',
+                team_id: teamId as string,
+                team_role: 'owner',
             },
         });
     } catch (error) {
@@ -186,8 +186,8 @@ export const me = async (req: Request, res: Response) => {
             email: user.email,
             name: user.name,
             role: user.role,
-            teamId: membership?.team_id || null,
-            teamRole: membership?.role || null,
+            team_id: membership?.team_id || null,
+            team_role: membership?.role || null,
         });
     } catch (error) {
         console.error('Auth check (me) error:', error);
