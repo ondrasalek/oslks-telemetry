@@ -19,9 +19,19 @@ RUN cargo build --release --bin oslks-telemetry
 # SRE: Strip binary symbols for minimal size
 RUN strip target/release/oslks-telemetry
 
-# Runtime stage (Distroless for maximum zero-trust security & tiny size)
-FROM gcr.io/distroless/cc-debian12 as runtime
+# Runtime stage (Debian slim for curl healthcheck + zero-trust security)
+FROM debian:bookworm-slim as runtime
 WORKDIR /app
+
+# Install runtime dependencies (including curl for healthchecks)
+RUN apt-get update && apt-get install -y \
+    libssl-dev \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN groupadd -r nonroot && useradd -M -r -g nonroot nonroot
 
 # Copy binary
 COPY --from=builder /app/target/release/oslks-telemetry /app/oslks-telemetry
@@ -29,13 +39,16 @@ COPY --from=builder /app/target/release/oslks-telemetry /app/oslks-telemetry
 # Copy GeoIP Database
 COPY src/data/GeoLite2-City.mmdb /app/GeoLite2-City.mmdb
 
+# Set ownership
+RUN chown -R nonroot:nonroot /app
+
 # Configuration
 ENV HOST="0.0.0.0"
 ENV PORT="8080"
 ENV GEOIP_DB_PATH="/app/GeoLite2-City.mmdb"
 
-# Drop privileges to non-root user (provided by distroless)
-USER nonroot:nonroot
+# Drop privileges to non-root user
+USER nonroot
 
 EXPOSE 8080
 
