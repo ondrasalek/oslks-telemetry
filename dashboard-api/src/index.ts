@@ -30,12 +30,27 @@ const PgSession = connectPg(session);
 // Trust proxy correctly for multi-hop proxy chains (Traefik -> Caddy -> Node)
 app.set('trust proxy', true);
 
+// Secure CORS configuration
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+    : ['*'];
+
 app.use(
     cors({
         origin: (origin, callback) => {
-            // Log origin to help debug CORS issues
-            console.log(`[CORS] Request from origin: ${origin}`);
-            callback(null, true); // Allow all for now during debugging
+            // Allow if no origin (e.g., server-to-server), if wildcard is set, or if origin is in whitelist
+            if (
+                !origin ||
+                allowedOrigins.includes('*') ||
+                allowedOrigins.includes(origin)
+            ) {
+                callback(null, true);
+            } else {
+                console.warn(
+                    `[CORS] Blocked request from unauthorized origin: ${origin}`,
+                );
+                callback(new Error('Not allowed by CORS'));
+            }
         },
         credentials: true,
     }),
