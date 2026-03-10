@@ -7,7 +7,8 @@ import authRoutes from './routes/auth.js';
 import websiteRoutes from './routes/websites.js';
 import analyticsRoutes from './routes/analytics.js';
 import sql from './lib/db.js';
-dotenv.config();
+// Only load .env if variables aren't already set by the environment (like Docker Compose)
+dotenv.config({ override: false });
 const app = express();
 const port = process.env.PORT || 8081;
 if (!process.env.DATABASE_URL) {
@@ -20,11 +21,22 @@ console.log(`Database URL (masked): ${process.env.DATABASE_URL.replace(/:[^:@]+@
 const PgSession = connectPg(session);
 // Trust proxy correctly for multi-hop proxy chains (Traefik -> Caddy -> Node)
 app.set('trust proxy', true);
+// Secure CORS configuration
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+    : ['*'];
 app.use(cors({
     origin: (origin, callback) => {
-        // Log origin to help debug CORS issues
-        console.log(`[CORS] Request from origin: ${origin}`);
-        callback(null, true); // Allow all for now during debugging
+        // Allow if no origin (e.g., server-to-server), if wildcard is set, or if origin is in whitelist
+        if (!origin ||
+            allowedOrigins.includes('*') ||
+            allowedOrigins.includes(origin)) {
+            callback(null, true);
+        }
+        else {
+            console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
     },
     credentials: true,
 }));
