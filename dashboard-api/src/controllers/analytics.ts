@@ -41,19 +41,32 @@ export const getStats = async (req: Request, res: Response) => {
                 COUNT(DISTINCT session_id)::int as visitors,
                 COUNT(*)::int as pageviews,
                 COUNT(*)::int as visits,
-                0::float as bounce_rate,
-                0::float as avg_duration
-            FROM events
-            WHERE website_id = ${website_id}::uuid
-              AND (${(start_at as string) || null}::timestamptz IS NULL OR created_at >= ${(start_at as string) || null}::timestamptz)
-              AND (${(end_at as string) || null}::timestamptz IS NULL OR created_at <= ${(end_at as string) || null}::timestamptz)
-              AND (${(url as string) || null}::text IS NULL OR url = ${(url as string) || null}::text)
-              AND (${(referrer as string) || null}::text IS NULL OR referrer = ${(referrer as string) || null}::text)
-              AND (${(os as string) || null}::text IS NULL OR os = ${(os as string) || null}::text)
-              AND (${(browser as string) || null}::text IS NULL OR browser = ${(browser as string) || null}::text)
-              AND (${(device as string) || null}::text IS NULL OR device_type = ${(device as string) || null}::text)
-              AND (${(country as string) || null}::text IS NULL OR country = ${(country as string) || null}::text)
-              AND (${(event_name as string) || null}::text IS NULL OR event_name = ${(event_name as string) || null}::text)
+                COALESCE(
+                    SUM(CASE WHEN pageviews = 1 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(DISTINCT session_id), 0) * 100,
+                    0
+                )::float as bounce_rate,
+                COALESCE(
+                    AVG(EXTRACT(EPOCH FROM duration)),
+                    0
+                )::float as avg_duration
+            FROM (
+                SELECT 
+                    session_id,
+                    COUNT(*) as pageviews,
+                    MAX(created_at) - MIN(created_at) as duration
+                FROM events
+                WHERE website_id = ${website_id}::uuid
+                  AND (${(start_at as string) || null}::timestamptz IS NULL OR created_at >= ${(start_at as string) || null}::timestamptz)
+                  AND (${(end_at as string) || null}::timestamptz IS NULL OR created_at <= ${(end_at as string) || null}::timestamptz)
+                  AND (${(url as string) || null}::text IS NULL OR url = ${(url as string) || null}::text)
+                  AND (${(referrer as string) || null}::text IS NULL OR referrer = ${(referrer as string) || null}::text)
+                  AND (${(os as string) || null}::text IS NULL OR os = ${(os as string) || null}::text)
+                  AND (${(browser as string) || null}::text IS NULL OR browser = ${(browser as string) || null}::text)
+                  AND (${(device as string) || null}::text IS NULL OR device_type = ${(device as string) || null}::text)
+                  AND (${(country as string) || null}::text IS NULL OR country = ${(country as string) || null}::text)
+                  AND (${(event_name as string) || null}::text IS NULL OR event_name = ${(event_name as string) || null}::text)
+                GROUP BY session_id
+            ) as session_stats
         `;
         console.log(`[Analytics] Stats result: ${JSON.stringify(stats[0])}`);
 
@@ -212,13 +225,26 @@ export const getTeamStats = async (req: Request, res: Response) => {
                 COUNT(DISTINCT session_id)::int as visitors,
                 COUNT(*)::int as pageviews,
                 COUNT(*)::int as visits,
-                0::float as bounce_rate,
-                0::float as avg_duration
-            FROM events e
-            JOIN websites w ON e.website_id = w.id
-            WHERE w.team_id = ${team_id}::uuid
-              AND (${(start_at as string) || null}::timestamptz IS NULL OR e.created_at >= ${(start_at as string) || null}::timestamptz)
-              AND (${(end_at as string) || null}::timestamptz IS NULL OR e.created_at <= ${(end_at as string) || null}::timestamptz)
+                COALESCE(
+                    SUM(CASE WHEN pageviews = 1 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(DISTINCT session_id), 0) * 100,
+                    0
+                )::float as bounce_rate,
+                COALESCE(
+                    AVG(EXTRACT(EPOCH FROM duration)),
+                    0
+                )::float as avg_duration
+            FROM (
+                SELECT 
+                    e.session_id,
+                    COUNT(*) as pageviews,
+                    MAX(e.created_at) - MIN(e.created_at) as duration
+                FROM events e
+                JOIN websites w ON e.website_id = w.id
+                WHERE w.team_id = ${team_id}::uuid
+                  AND (${(start_at as string) || null}::timestamptz IS NULL OR e.created_at >= ${(start_at as string) || null}::timestamptz)
+                  AND (${(end_at as string) || null}::timestamptz IS NULL OR e.created_at <= ${(end_at as string) || null}::timestamptz)
+                GROUP BY e.session_id
+            ) as session_stats
         `;
 
         res.json(stats[0]);
@@ -260,12 +286,25 @@ export const getSharedStats = async (req: Request, res: Response) => {
                 COUNT(DISTINCT session_id)::int as visitors,
                 COUNT(*)::int as pageviews,
                 COUNT(*)::int as visits,
-                0::float as bounce_rate,
-                0::float as avg_duration
-            FROM events
-            WHERE website_id = ${website.id}::uuid
-              AND (${(start_at as string) || null}::timestamptz IS NULL OR created_at >= ${(start_at as string) || null}::timestamptz)
-              AND (${(end_at as string) || null}::timestamptz IS NULL OR created_at <= ${(end_at as string) || null}::timestamptz)
+                COALESCE(
+                    SUM(CASE WHEN pageviews = 1 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(DISTINCT session_id), 0) * 100,
+                    0
+                )::float as bounce_rate,
+                COALESCE(
+                    AVG(EXTRACT(EPOCH FROM duration)),
+                    0
+                )::float as avg_duration
+            FROM (
+                SELECT 
+                    session_id,
+                    COUNT(*) as pageviews,
+                    MAX(created_at) - MIN(created_at) as duration
+                FROM events
+                WHERE website_id = ${website.id}::uuid
+                  AND (${(start_at as string) || null}::timestamptz IS NULL OR created_at >= ${(start_at as string) || null}::timestamptz)
+                  AND (${(end_at as string) || null}::timestamptz IS NULL OR created_at <= ${(end_at as string) || null}::timestamptz)
+                GROUP BY session_id
+            ) as session_stats
         `;
 
         res.json(stats[0]);
