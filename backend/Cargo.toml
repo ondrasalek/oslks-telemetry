@@ -58,12 +58,6 @@ moka = { version = "0.12", features = ["future"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Auth & Sessions
-bcrypt = "0.17"
-rand = "0.8"
-tower-sessions = "0.13"
-tower-sessions-sqlx-store = { version = "0.14", features = ["postgres"] }
-
 # Email (SMTP)
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1-rustls-tls"] }
 html-escape = "0.2.13"

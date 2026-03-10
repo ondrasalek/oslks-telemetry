@@ -19,7 +19,6 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod api;
-mod auth;
 mod config;
 mod db;
 mod domain_cache;
@@ -182,10 +181,7 @@ async fn main() -> Result<()> {
     // Create broadcast channel for WebSocket updates
     let (tx, _rx) = broadcast::channel(100);
 
-    // Build dashboard router before pool is moved into state
-    let dashboard_router = crate::api::dashboard::router(pool.clone());
-
-    // Create shared application state
+    // Start background pinger
     let state = AppState {
         pool,
         config: Arc::new(config.clone()),
@@ -211,8 +207,6 @@ async fn main() -> Result<()> {
         // Health check endpoints (consolidating under /api for dashboard)
         .route("/health", get(health))
         .route("/api/health", get(health_detailed))
-        // Dashboard API routes
-        .nest("/api", dashboard_router)
         // Add middleware
         .layer(cors)
         .layer(
