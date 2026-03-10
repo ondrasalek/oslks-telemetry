@@ -16,28 +16,26 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 ENV SQLX_OFFLINE=true
 RUN cargo build --release --bin oslks-telemetry
+# SRE: Strip binary symbols for minimal size
+RUN strip target/release/oslks-telemetry
 
-# Runtime stage
-FROM debian:bookworm-slim as runtime
+# Runtime stage (Distroless for maximum zero-trust security & tiny size)
+FROM gcr.io/distroless/cc-debian12 as runtime
 WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    libssl-dev \
-    ca-certificates \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy binary
 COPY --from=builder /app/target/release/oslks-telemetry /app/oslks-telemetry
 
 # Copy GeoIP Database
 COPY src/data/GeoLite2-City.mmdb /app/GeoLite2-City.mmdb
-ENV GEOIP_DB_PATH="/app/GeoLite2-City.mmdb"
 
 # Configuration
 ENV HOST="0.0.0.0"
 ENV PORT="8080"
+ENV GEOIP_DB_PATH="/app/GeoLite2-City.mmdb"
+
+# Drop privileges to non-root user (provided by distroless)
+USER nonroot:nonroot
 
 EXPOSE 8080
 

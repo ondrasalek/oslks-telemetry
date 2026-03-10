@@ -1,7 +1,18 @@
 :80 {
     root * /srv
-
+    
+    # Enable Gzip compression
     encode gzip
+
+    # Remove server identity signatures
+    header -Server
+    
+    # Serve static assets efficiently
+    @static {
+        file
+        path *.ico *.css *.js *.gif *.webp *.avif *.jpg *.jpeg *.png *.svg *.woff *.woff2
+    }
+    header @static Cache-Control "public, max-age=31536000, immutable"
 
     # API proxy (Node.js Dashboard)
     handle /api/* {
@@ -10,7 +21,7 @@
         }
     }
 
-    # Stealth telemetry collector (strip /assets/v1 prefix before proxying)
+    # Stealth telemetry collector (strip /assets/v1 prefix)
     handle /assets/v1/* {
         uri strip_prefix /assets/v1
         reverse_proxy backend:8080 {
@@ -18,9 +29,13 @@
         }
     }
 
-    # Serve SPA with fallback to index.html
+    # SPA routing fallback
     handle {
         try_files {path} /index.html
-        file_server
+        file_server {
+            hide .git
+            hide .env
+            disable_browse
+        }
     }
 }

@@ -25,4 +25,9 @@ COPY Caddyfile /etc/caddy/Caddyfile
 # Copy built static files
 COPY --from=builder /app/dist /srv
 
+# SRE Zero Trust - non-root webserver
+RUN addgroup -S caddy && adduser -S caddy -G caddy
+RUN chown -R caddy:caddy /srv /etc/caddy /data /config
+USER caddy
+
 EXPOSE 80
