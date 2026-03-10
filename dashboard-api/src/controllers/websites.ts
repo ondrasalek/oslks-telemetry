@@ -15,6 +15,7 @@ export const listWebsites = async (req: Request, res: Response) => {
             WHERE tm.user_id = ${userId}::uuid
             ORDER BY w.is_pinned DESC, w.created_at DESC
         `;
+
         console.log(
             `[Websites] Found ${websites.length} websites for user ${userId}`,
         );
@@ -27,14 +28,14 @@ export const listWebsites = async (req: Request, res: Response) => {
 
 export const createWebsite = async (req: Request, res: Response) => {
     const userId = (req.session as any).userId;
-    const { name, domain, teamId } = req.body;
+    const { name, domain, team_id } = req.body;
 
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
-        let finalTeamId = teamId;
+        let finalTeamId = team_id;
 
-        // If no teamId provided, use user's primary team
+        // If no team_id provided, use user's primary team
         if (!finalTeamId) {
             const memberships = await sql`
                 SELECT team_id FROM team_members 
