@@ -100,22 +100,11 @@ app.use('/api/websites', websiteRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 // Health check
-app.get('/health', async (req, res) => {
-    try {
-        await sql`SELECT 1`;
-        res.json({
-            status: 'ok',
-            service: 'dashboard-api',
-            database: 'connected',
-        });
-    } catch (error) {
-        console.error('[Health] Check failed:', error);
-        res.status(503).json({
-            status: 'error',
-            service: 'dashboard-api',
-            database: 'disconnected',
-        });
-    }
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        service: 'dashboard-api',
+    });
 });
 
 app.get('/api/users/count', async (req, res) => {
