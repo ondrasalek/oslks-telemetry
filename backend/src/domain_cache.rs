@@ -108,6 +108,13 @@ impl DomainCache {
             return Ok(());
         }
 
+        // --- Local development relaxation ---
+        // Allow localhost and 127.0.0.1 origins to match any website during development
+        if origin_normalized == "localhost" || origin_normalized == "127.0.0.1" || origin_normalized == "[::1]" {
+            tracing::debug!("Localhost origin allowed for website={}", website_id);
+            return Ok(());
+        }
+
         // Subdomain match: origin ends with ".{domain}"
         let subdomain_suffix = format!(".{}", domain_normalized.to_ascii_lowercase());
         if origin_normalized

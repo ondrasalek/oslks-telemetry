@@ -6,12 +6,12 @@ export const listWebsites = async (req, res) => {
     try {
         console.log(`[Websites] Listing websites for user ${userId}`);
         const websites = await sql `
-            SELECT w.* 
+            SELECT w.*, t.name as team_name
             FROM websites w
-            JOIN teams t ON w.team_id = t.id
-            JOIN team_members tm ON t.id = tm.team_id
+            JOIN team_members tm ON w.team_id = tm.team_id
+            LEFT JOIN teams t ON w.team_id = t.id
             WHERE tm.user_id = ${userId}::uuid
-            ORDER BY w.created_at DESC
+            ORDER BY w.is_pinned DESC, w.created_at DESC
         `;
         console.log(`[Websites] Found ${websites.length} websites for user ${userId}`);
         res.json(websites);
@@ -27,19 +27,34 @@ export const createWebsite = async (req, res) => {
     if (!userId)
         return res.status(401).json({ error: 'Unauthorized' });
     try {
+        let finalTeamId = teamId;
+        // If no teamId provided, use user's primary team
+        if (!finalTeamId) {
+            const memberships = await sql `
+                SELECT team_id FROM team_members 
+                WHERE user_id = ${userId}::uuid 
+                LIMIT 1
+            `;
+            if (memberships.length > 0) {
+                finalTeamId = memberships[0].team_id;
+            }
+        }
         // Ensure user is in the team
-        if (teamId) {
+        if (finalTeamId) {
             const members = await sql `
                 SELECT 1 FROM team_members 
-                WHERE team_id = ${teamId} AND user_id = ${userId}
+                WHERE team_id = ${finalTeamId}::uuid AND user_id = ${userId}::uuid
             `;
             if (members.length === 0)
                 return res.status(403).json({ error: 'Forbidden' });
         }
+        else {
+            return res.status(400).json({ error: 'Team ID is required' });
+        }
         const shareId = Math.random().toString(36).substring(2, 15);
         const [website] = await sql `
             INSERT INTO websites (name, domain, team_id, share_id)
-            VALUES (${name || null}, ${domain}, ${teamId || null}, ${shareId})
+            VALUES (${name || null}, ${domain}, ${finalTeamId}::uuid, ${shareId})
             RETURNING *
         `;
         res.status(201).json(website);
@@ -59,8 +74,7 @@ export const getWebsite = async (req, res) => {
         const websites = await sql `
             SELECT w.* 
             FROM websites w
-            JOIN teams t ON w.team_id = t.id
-            JOIN team_members tm ON t.id = tm.team_id
+            JOIN team_members tm ON w.team_id = tm.team_id
             WHERE w.id = ${id}::uuid AND tm.user_id = ${userId}::uuid
             LIMIT 1
         `;
