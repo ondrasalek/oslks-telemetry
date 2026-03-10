@@ -94,10 +94,17 @@ app.use((req, res, next) => {
     next();
 });
 
+import teamRoutes from './routes/teams.js';
+import userRoutes from './routes/users.js';
+import settingsRoutes from './routes/settings.js';
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/websites', websiteRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
