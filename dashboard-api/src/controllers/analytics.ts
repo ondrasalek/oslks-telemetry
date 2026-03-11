@@ -39,7 +39,7 @@ export const getStats = async (req: Request, res: Response) => {
         const stats = await sql`
             SELECT 
                 COUNT(DISTINCT session_id)::int as visitors,
-                COUNT(*)::int as pageviews,
+                COALESCE(SUM(pageviews), 0)::int as pageviews,
                 COUNT(*)::int as visits,
                 COALESCE(
                     SUM(CASE WHEN pageviews = 1 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(DISTINCT session_id), 0) * 100,
@@ -223,7 +223,7 @@ export const getTeamStats = async (req: Request, res: Response) => {
         const stats = await sql`
             SELECT 
                 COUNT(DISTINCT session_id)::int as visitors,
-                COUNT(*)::int as pageviews,
+                COALESCE(SUM(pageviews), 0)::int as pageviews,
                 COUNT(*)::int as visits,
                 COALESCE(
                     SUM(CASE WHEN pageviews = 1 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(DISTINCT session_id), 0) * 100,
@@ -284,7 +284,7 @@ export const getSharedStats = async (req: Request, res: Response) => {
         const stats = await sql`
             SELECT 
                 COUNT(DISTINCT session_id)::int as visitors,
-                COUNT(*)::int as pageviews,
+                COALESCE(SUM(pageviews), 0)::int as pageviews,
                 COUNT(*)::int as visits,
                 COALESCE(
                     SUM(CASE WHEN pageviews = 1 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(DISTINCT session_id), 0) * 100,

@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -11,6 +11,7 @@ import { useEnvConfig } from '@/hooks/use-config';
 import { useTeamWebsites } from '@/hooks/use-websites';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { Users, Globe, MoreVertical, Shield } from 'lucide-react';
 import { useState } from 'react';
@@ -279,22 +280,39 @@ export function TeamDetailPage() {
                                                     className='border-b last:border-0'
                                                 >
                                                     <td className='p-3'>
-                                                        <div className='flex items-center gap-3'>
+                                                        <Link
+                                                            to={`/dashboard/sites/${site.id}`}
+                                                            className='flex items-center gap-3 group/link hover:opacity-80 transition-opacity'
+                                                        >
                                                             {site.icon_url ? (
                                                                 <img
                                                                     src={
                                                                         site.icon_url
                                                                     }
-                                                                    className='h-8 w-8 rounded'
+                                                                    className='h-8 w-8 rounded object-cover'
                                                                     alt=''
+                                                                    onError={(
+                                                                        e,
+                                                                    ) => {
+                                                                        e.currentTarget.style.display =
+                                                                            'none';
+                                                                        e.currentTarget.nextElementSibling?.classList.remove(
+                                                                            'hidden',
+                                                                        );
+                                                                    }}
                                                                 />
-                                                            ) : (
-                                                                <div className='h-8 w-8 rounded bg-muted flex items-center justify-center'>
-                                                                    <Globe className='h-4 w-4 text-muted-foreground' />
-                                                                </div>
-                                                            )}
+                                                            ) : null}
+                                                            <div
+                                                                className={cn(
+                                                                    'h-8 w-8 rounded bg-muted flex items-center justify-center',
+                                                                    site.icon_url &&
+                                                                        'hidden',
+                                                                )}
+                                                            >
+                                                                <Globe className='h-4 w-4 text-muted-foreground' />
+                                                            </div>
                                                             <div>
-                                                                <p className='font-medium'>
+                                                                <p className='font-medium text-primary hover:underline'>
                                                                     {site.name ||
                                                                         site.domain}
                                                                 </p>
@@ -304,7 +322,7 @@ export function TeamDetailPage() {
                                                                     }
                                                                 </p>
                                                             </div>
-                                                        </div>
+                                                        </Link>
                                                     </td>
                                                     <td className='p-3'>
                                                         <Badge

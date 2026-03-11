@@ -49,6 +49,16 @@ import {
 import { cn } from '@/lib/utils';
 import type { Website } from '@/types/api';
 
+function formatDuration(seconds: number) {
+    if (!seconds) return '0s';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+}
+
 export function SiteDetailPage() {
     const { id } = useParams<{ id: string }>();
     const { data: website, isLoading, isFetching } = useWebsite(id ?? '');
@@ -259,7 +269,9 @@ export function SiteDetailPage() {
                                     <Skeleton className='h-8 w-24' />
                                 ) : (
                                     <div className='text-2xl font-bold'>
-                                        {stats?.avg_duration ?? 0}s
+                                        {formatDuration(
+                                            Number(stats?.avg_duration || 0),
+                                        )}
                                     </div>
                                 )}
                             </CardContent>
