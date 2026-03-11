@@ -30,14 +30,14 @@ const mainNav: NavItem[] = [
     },
     { label: 'Websites', href: '/dashboard/sites', icon: Globe },
     { label: 'Teams', href: '/dashboard/teams', icon: Building2 },
-    { label: 'Settings', href: '/dashboard/settings', icon: Settings },
+    { label: 'Profile & API', href: '/dashboard/settings', icon: Settings },
 ];
 
 const adminNav: NavItem[] = [
     { label: 'Users', href: '/dashboard/admin/users', icon: Users },
     { label: 'All Teams', href: '/dashboard/admin/teams', icon: Building2 },
     { label: 'All Websites', href: '/dashboard/admin/websites', icon: Globe },
-    { label: 'App Settings', href: '/dashboard/settings', icon: Mail },
+    { label: 'Instance Settings', href: '/dashboard/settings', icon: Mail },
 ];
 
 // ── Component ────────────────────────────────────────────

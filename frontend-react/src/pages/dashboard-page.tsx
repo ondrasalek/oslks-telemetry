@@ -88,9 +88,7 @@ export function DashboardPage() {
                 />
                 <StatCard
                     title='Avg. Bounce Rate'
-                    value={
-                        ((teamStats?.bounce_rate ?? 0) * 100).toFixed(1) + '%'
-                    }
+                    value={(teamStats?.bounce_rate ?? 0).toFixed(1) + '%'}
                     icon={ArrowUpRight}
                     loading={statsLoading}
                 />

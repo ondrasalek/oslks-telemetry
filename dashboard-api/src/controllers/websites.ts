@@ -98,3 +98,27 @@ export const getWebsite = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to fetch website' });
     }
 };
+
+export const listAllWebsites = async (req: Request, res: Response) => {
+    const userId = (req.session as any).userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        const user =
+            await sql`SELECT role FROM users WHERE id = ${userId}::uuid`;
+        if (user[0]?.role !== 'superuser') {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const websites = await sql`
+            SELECT w.id, w.domain, w.name, w.status, w.share_id, w.is_pinned, w.created_at, t.name as team_name, w.team_id
+            FROM websites w
+            LEFT JOIN teams t ON w.team_id = t.id
+            ORDER BY w.created_at DESC
+        `;
+        res.json(websites);
+    } catch (error) {
+        console.error('List all websites error:', error);
+        res.status(500).json({ error: 'Failed to fetch all websites' });
+    }
+};

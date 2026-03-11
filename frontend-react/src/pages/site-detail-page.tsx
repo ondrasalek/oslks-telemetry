@@ -243,7 +243,7 @@ export function SiteDetailPage() {
                                     <Skeleton className='h-8 w-24' />
                                 ) : (
                                     <div className='text-2xl font-bold'>
-                                        {stats?.bounce_rate ?? 0}%
+                                        {(stats?.bounce_rate ?? 0).toFixed(1)}%
                                     </div>
                                 )}
                             </CardContent>
