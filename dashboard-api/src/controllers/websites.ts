@@ -122,3 +122,32 @@ export const listAllWebsites = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to fetch all websites' });
     }
 };
+
+export const listTeamWebsites = async (req: Request, res: Response) => {
+    const { team_id } = req.params;
+    const userId = (req.session as any).userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        // Verify user is in the team
+        const members = await sql`
+            SELECT 1 FROM team_members 
+            WHERE team_id = ${team_id}::uuid AND user_id = ${userId}::uuid
+            LIMIT 1
+        `;
+        if (members.length === 0)
+            return res.status(403).json({ error: 'Forbidden' });
+
+        const websites = await sql`
+            SELECT w.*
+            FROM websites w
+            WHERE w.team_id = ${team_id}::uuid
+            ORDER BY w.is_pinned DESC, w.created_at DESC
+        `;
+
+        res.json(websites);
+    } catch (error) {
+        console.error('List team websites error:', error);
+        res.status(500).json({ error: 'Failed to fetch team websites' });
+    }
+};

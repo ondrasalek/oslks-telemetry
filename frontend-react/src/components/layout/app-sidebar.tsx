@@ -37,7 +37,11 @@ const adminNav: NavItem[] = [
     { label: 'Users', href: '/dashboard/admin/users', icon: Users },
     { label: 'All Teams', href: '/dashboard/admin/teams', icon: Building2 },
     { label: 'All Websites', href: '/dashboard/admin/websites', icon: Globe },
-    { label: 'Instance Settings', href: '/dashboard/settings', icon: Mail },
+    {
+        label: 'Instance Settings',
+        href: '/dashboard/admin/settings',
+        icon: Mail,
+    },
 ];
 
 // ── Component ────────────────────────────────────────────

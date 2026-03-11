@@ -19,6 +19,7 @@ import { SettingsPage } from '@/pages/settings-page';
 import { AdminUsersPage } from '@/pages/admin/users-page';
 import { AdminTeamsPage } from '@/pages/admin/teams-page';
 import { AdminWebsitesPage } from '@/pages/admin/websites-page';
+import { AdminSettingsPage } from '@/pages/admin/settings-page';
 import { NotFoundPage } from '@/pages/not-found-page';
 import { TermsPage } from '@/pages/terms-page';
 import { PrivacyPage } from '@/pages/privacy-page';
@@ -84,6 +85,10 @@ export default function App() {
                             <Route
                                 path='admin/websites'
                                 element={<AdminWebsitesPage />}
+                            />
+                            <Route
+                                path='admin/settings'
+                                element={<AdminSettingsPage />}
                             />
                         </Route>
                     </Route>
