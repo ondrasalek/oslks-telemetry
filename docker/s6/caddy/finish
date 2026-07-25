@@ -1,0 +1,5 @@
+#!/command/with-contenv sh
+# A supervised process that stays dead leaves the container running degraded,
+# which a container-level healthcheck can only report after the fact. Bring the
+# whole container down instead and let the restart policy handle it.
+/run/s6/basedir/bin/halt

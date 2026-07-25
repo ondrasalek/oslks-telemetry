@@ -1,0 +1,10 @@
+#!/command/with-contenv sh
+# Rust collector. Runs the database migrations on startup, so nothing else in
+# this container may talk to the DB until `collector-ready` has seen it healthy.
+#
+# PORT is set explicitly: the collector and the dashboard API both read it, and
+# a container-level PORT would otherwise put them on the same port.
+export PORT=8080
+export HOST=0.0.0.0
+cd /app/collector
+exec s6-setuidgid oslks ./oslks-telemetry

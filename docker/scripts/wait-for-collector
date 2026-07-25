@@ -1,0 +1,21 @@
+#!/command/with-contenv sh
+# The collector applies the sqlx migrations at startup. Hold the dashboard API
+# until it reports healthy, so the API never queries a table that a pending
+# migration has not created yet. This replaces the compose-level
+# `depends_on: backend: service_healthy` gate the split deployment relied on.
+set -e
+
+TIMEOUT="${COLLECTOR_WAIT_TIMEOUT:-120}"
+i=0
+
+while [ "$i" -lt "$TIMEOUT" ]; do
+    if curl -fsS -o /dev/null http://127.0.0.1:8080/health 2>/dev/null; then
+        echo "[init] collector healthy after ${i}s — migrations applied"
+        exit 0
+    fi
+    i=$((i + 1))
+    sleep 1
+done
+
+echo "[init] collector did not become healthy within ${TIMEOUT}s" >&2
+exit 1

@@ -1,0 +1,5 @@
+#!/command/with-contenv sh
+# Static SPA + reverse proxy to the two sibling processes.
+export XDG_DATA_HOME=/data
+export XDG_CONFIG_HOME=/config
+exec s6-setuidgid oslks caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

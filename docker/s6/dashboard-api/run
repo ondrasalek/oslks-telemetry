@@ -1,0 +1,5 @@
+#!/command/with-contenv sh
+# Node dashboard API. See collector/run for why PORT is set here.
+export PORT=8081
+cd /app/dashboard-api
+exec s6-setuidgid oslks node dist/index.js

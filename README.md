@@ -159,20 +159,40 @@ Events are sent via `sendBeacon` (preferred) or `fetch` with `keepalive`.
 
 The easiest way to get started is using Docker Compose.
 
-### Pull Docker images
+### Pull the Docker image
+
+The collector, dashboard API and SPA ship as a **single image**, supervised by
+s6-overlay:
 
 ```bash
-# Pull the latest images from the self-hosted Gitea registry
-docker pull git.slks.cz/oslks/oslks-collector:latest
-docker pull git.slks.cz/oslks/oslks-frontend:latest
+# Pull the latest image from the self-hosted Gitea registry
+docker pull git.slks.cz/oslks/oslks-radar:latest
 ```
+
+| Process         | Port   | Role                                        |
+| --------------- | ------ | ------------------------------------------- |
+| `collector`     | `8080` | Rust ingest endpoint — also runs migrations  |
+| `dashboard-api` | `8081` | Node dashboard API                          |
+| `caddy`         | `80`   | Serves the SPA and proxies to the other two — the only exposed port |
+
+Startup order is enforced inside the container: the collector applies the
+database migrations first, and the dashboard API waits for it to report healthy
+before starting. If any of the three processes dies, the container halts so the
+restart policy brings the whole thing back cleanly.
 
 ### Docker Compose
 
-Run the entire stack (Collector, Dashboard, and TimescaleDB) with one command:
+Run the entire stack (app + TimescaleDB) with one command:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
+```
+
+To pin a specific build instead of `latest`, set `IMAGE_TAG` to a commit SHA in
+your `.env`:
+
+```bash
+IMAGE_TAG=5547666...
 ```
 
 ### Prerequisites
@@ -254,12 +274,27 @@ docker compose up -d --build
 │   │   ├── lib/            # API client, utilities
 │   │   ├── types/          # TypeScript API interfaces
 │   │   └── App.tsx         # Router + providers
-│   ├── Caddyfile           # Production Caddy config (SPA + API proxy)
+│   ├── Caddyfile           # Caddy config for the standalone frontend image
 │   └── Dockerfile          # Node build → Caddy runtime
+├── dashboard-api/          # Node/Express dashboard API
+│   ├── src/
+│   │   ├── controllers/    # Route handlers (auth, websites, analytics, api keys)
+│   │   ├── routes/         # Express routers
+│   │   ├── middleware/     # API-key authentication and scoping
+│   │   └── lib/            # DB client, key generation/hashing
+│   └── Dockerfile
+├── docker/                 # Combined-image assets
+│   ├── Caddyfile           # Proxies to sibling processes on localhost
+│   ├── s6/                 # s6-overlay service definitions
+│   └── scripts/            # Startup ordering helpers
+├── Dockerfile              # Combined image (collector + API + SPA)
 ├── docker-compose.yml      # Full-stack orchestration
 ├── .env.example            # Environment template
 └── README.md
 ```
+
+The per-service Dockerfiles are kept for local development and for running any
+component on its own; production deploys use the combined image at the root.
 
 ---
 
@@ -283,8 +318,15 @@ The project uses a single, flexible `docker-compose.yml` for both local developm
 
 | Service | Key Variables |
 | :--- | :--- |
-| **Backend** | `DATABASE_URL`, `SESSION_SECRET`, `SMTP_*` |
-| **Frontend** | `VITE_APP_URL`, `COLLECTOR_INTERNAL_URL` |
+| **app** | `DATABASE_URL`, `SESSION_SECRET`, `CORS_ALLOWED_ORIGINS`, `GEOIP_DB_PATH`, `SMTP_*`, `IMAGE_TAG` |
+| **db** | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` |
+
+> **Do not set `PORT` on the `app` service.** The collector and the dashboard
+> API both read it, and each supervised process assigns its own (8080 / 8081).
+
+The `VITE_*` variables are **build-time** arguments baked into the SPA bundle,
+not runtime environment variables — they are set as build args in the CI
+workflow, not in `.env`.
 
 ---
 

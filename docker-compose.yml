@@ -28,18 +28,21 @@ services:
         networks:
             - coolify
 
-    # --- 2. Backend (Rust Collector) ---
-    backend:
-        image: 'git.slks.cz/oslks/oslks-collector:latest'
-        container_name: oslks-backend
+    # --- 2. Application (collector + dashboard API + SPA, one image) ---
+    # s6-overlay supervises all three processes; only Caddy on :80 is exposed.
+    # Startup order is enforced inside the container: the collector applies the
+    # migrations first, and the dashboard API waits for it to report healthy.
+    app:
+        image: 'git.slks.cz/oslks/oslks-radar:${IMAGE_TAG:-latest}'
+        container_name: oslks-app
         restart: unless-stopped
         security_opt:
             - no-new-privileges:true
         deploy:
             resources:
                 limits:
-                    cpus: '0.5'
-                    memory: '256M'
+                    cpus: '1.2'
+                    memory: '768M'
         environment:
             - DATABASE_URL
             - SESSION_SECRET
@@ -55,63 +58,6 @@ services:
         depends_on:
             db:
                 condition: service_healthy
-        healthcheck:
-            test:
-                - CMD
-                - curl
-                - '-f'
-                - 'http://127.0.0.1:8080/health'
-            interval: 10s
-            timeout: 5s
-            retries: 5
-        networks:
-            - coolify
-
-    dashboard-api:
-        image: 'git.slks.cz/oslks/oslks-dashboard-api:latest'
-        container_name: oslks-dashboard-api
-        restart: unless-stopped
-        security_opt:
-            - no-new-privileges:true
-        deploy:
-            resources:
-                limits:
-                    cpus: '0.5'
-                    memory: '256M'
-        depends_on:
-            backend:
-                condition: service_healthy
-        environment:
-            - DATABASE_URL
-            - SESSION_SECRET
-            - CORS_ALLOWED_ORIGINS
-            - PORT=8081
-            - NODE_ENV=production
-        healthcheck:
-            test: 'wget -qO- http://127.0.0.1:8081/health || exit 1'
-            interval: 10s
-            timeout: 5s
-            retries: 5
-        networks:
-            - coolify
-
-    # --- 4. Frontend (React SPA) ---
-    frontend:
-        image: 'git.slks.cz/oslks/oslks-frontend:latest'
-        container_name: oslks-frontend
-        restart: unless-stopped
-        security_opt:
-            - no-new-privileges:true
-        deploy:
-            resources:
-                limits:
-                    cpus: '0.2'
-                    memory: '128M'
-        depends_on:
-            backend:
-                condition: service_healthy
-            dashboard-api:
-                condition: service_healthy
         labels:
             - traefik.enable=true
             - traefik.http.routers.oslks-frontend.rule=Host(`radar.slks.cz`)
@@ -122,12 +68,14 @@ services:
             - traefik.http.routers.oslks-frontend-http.entrypoints=web
             - traefik.http.routers.oslks-frontend-http.middlewares=
             - traefik.http.services.oslks-frontend.loadbalancer.server.port=80
+        # Probes all three processes — a dead API must not read as healthy.
         healthcheck:
             test:
                 - CMD-SHELL
-                - 'wget --spider -q http://127.0.0.1:80/ || exit 1'
-            interval: 10s
+                - 'curl -fsS -o /dev/null http://127.0.0.1:8080/health && curl -fsS -o /dev/null http://127.0.0.1:8081/health && curl -fsS -o /dev/null http://127.0.0.1:80/ || exit 1'
+            interval: 15s
             timeout: 5s
+            start_period: 45s
             retries: 5
         networks:
             - coolify

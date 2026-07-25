@@ -1,0 +1,13 @@
+.git
+.gitea
+.github
+**/node_modules
+**/dist
+backend/target
+backend/.env
+dashboard-api/.env
+frontend-react/.env
+**/npm-debug.log
+*.md
+docker-compose.yml
+test_db*.js

@@ -1,0 +1,46 @@
+# Caddy config for the combined image. Identical to frontend-react/Caddyfile
+# except that the upstreams are sibling processes in this container rather than
+# separate compose services.
+:80 {
+    root * /srv
+
+    # Enable Gzip compression
+    encode gzip
+
+    # Remove server identity signatures
+    header -Server
+
+    # Serve static assets efficiently
+    @static {
+        file
+        path *.ico *.css *.js *.gif *.webp *.avif *.jpg *.jpeg *.png *.svg *.woff *.woff2
+    }
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    # API proxy (Node.js Dashboard)
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8081 {
+            header_down -WWW-Authenticate
+            header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+            header_up X-Forwarded-For {http.request.header.X-Forwarded-For}
+            header_up X-Forwarded-Host {http.request.header.X-Forwarded-Host}
+        }
+    }
+
+    # Stealth telemetry collector (strip /assets/v1 prefix)
+    handle /assets/v1/* {
+        uri strip_prefix /assets/v1
+        reverse_proxy 127.0.0.1:8080 {
+            header_down -WWW-Authenticate
+        }
+    }
+
+    # SPA routing fallback
+    handle {
+        try_files {path} /index.html
+        file_server {
+            hide .git
+            hide .env
+        }
+    }
+}
