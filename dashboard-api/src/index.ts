@@ -6,6 +6,8 @@ import connectPg from 'connect-pg-simple';
 import authRoutes from './routes/auth.js';
 import websiteRoutes from './routes/websites.js';
 import analyticsRoutes from './routes/analytics.js';
+import apiKeyRoutes from './routes/api-keys.js';
+import { apiKeyAuth, sessionOnly } from './middleware/apiKeyAuth.js';
 import sql from './lib/db.js';
 
 // Only load .env if variables aren't already set by the environment (like Docker Compose)
@@ -70,26 +72,35 @@ sessionStore.on('error', (err) => {
     console.error('[SessionStore] Database error:', err);
 });
 
-app.use(
-    session({
-        store: sessionStore,
-        secret: process.env.SESSION_SECRET || 'local_dev_secret_key_change_me',
-        resave: false,
-        saveUninitialized: false,
-        name: 'oslks_session',
-        cookie: {
-            secure: true, // Always true since we are behind Traefik HTTPS
-            httpOnly: true,
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        },
-    }),
+const sessionMiddleware = session({
+    store: sessionStore,
+    secret: process.env.SESSION_SECRET || 'local_dev_secret_key_change_me',
+    resave: false,
+    saveUninitialized: false,
+    name: 'oslks_session',
+    cookie: {
+        secure: true, // Always true since we are behind Traefik HTTPS
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    },
+});
+
+// Header-based authentication for server-to-server callers. Runs before the
+// session middleware so a valid key short-circuits it entirely: no session row
+// is created and no cookie is issued for machine traffic.
+app.use(apiKeyAuth);
+app.use((req, res, next) =>
+    req.apiKey ? next() : sessionMiddleware(req, res, next),
 );
 
 // Logging middleware
 app.use((req, res, next) => {
+    const auth = req.apiKey
+        ? `ApiKey: ${req.apiKey.id}`
+        : `SessionID: ${req.sessionID}`;
     console.log(
-        `[HTTP] ${req.method} ${req.url} (SessionID: ${req.sessionID}, UserID: ${(req.session as any).userId})`,
+        `[HTTP] ${req.method} ${req.url} (${auth}, UserID: ${(req.session as any)?.userId})`,
     );
     next();
 });
@@ -99,12 +110,15 @@ import userRoutes from './routes/users.js';
 import settingsRoutes from './routes/settings.js';
 
 // Routes
-app.use('/api/auth', authRoutes);
+// `sessionOnly` on the administrative routers is belt-and-braces: the API-key
+// scope allowlist already denies anything not explicitly listed.
+app.use('/api/auth', sessionOnly, authRoutes);
 app.use('/api/websites', websiteRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/teams', teamRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/settings', settingsRoutes);
+app.use('/api/teams', sessionOnly, teamRoutes);
+app.use('/api/users', sessionOnly, userRoutes);
+app.use('/api/settings', sessionOnly, settingsRoutes);
+app.use('/api/api-keys', apiKeyRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

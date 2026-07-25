@@ -304,7 +304,65 @@ The project uses a single, flexible `docker-compose.yml` for both local developm
 - **Team management** — overview of all teams and members
 - **SMTP configuration** — set up outgoing email with host, port, credentials
 - **Test email** — send a test notification to verify SMTP settings
-- **API keys** — generate and revoke tokens for external integrations
+
+---
+
+## 🔑 API Keys (server-to-server)
+
+External services (a CMS, a deploy script, a cron job) can call the dashboard
+API without a browser session. Create a key under **Settings → API Keys**; the
+secret is shown **once**, at creation time — only its SHA-256 hash is stored.
+
+Present it on every request:
+
+```bash
+curl -H "Authorization: Bearer oslks_<prefix>_<secret>" \
+     https://radar.slks.cz/api/websites
+```
+
+`X-Api-Key: <key>` is accepted as an alternative header.
+
+### Creating a website programmatically
+
+```bash
+curl -X POST https://radar.slks.cz/api/websites \
+     -H "Authorization: Bearer $OSLKS_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"Marketing site","domain":"example.com"}'
+```
+
+Returns `201` with the created row, including its UUID `id` — the value the
+tracker snippet needs as its website ID.
+
+| Status | Meaning                                       |
+| ------ | --------------------------------------------- |
+| `201`  | Created                                       |
+| `400`  | `domain` missing                              |
+| `401`  | Key missing, malformed, unknown, or revoked   |
+| `403`  | Endpoint not available to API keys, or a team the key isn't scoped to |
+| `409`  | A website with that domain already exists     |
+
+### Scope
+
+A key acts as its creator, confined to **one team**. It reaches only:
+
+| Method | Endpoint                                                    |
+| ------ | ----------------------------------------------------------- |
+| `GET`  | `/api/websites`, `/api/websites/:id`, `/api/websites/team/:team_id` |
+| `POST` | `/api/websites`                                             |
+| `GET`  | `/api/analytics/:website_id/{stats,metrics,chart,active}`   |
+| `GET`  | `/api/analytics/team/:team_id/stats`                        |
+
+Everything else — user and team administration, instance settings, and API-key
+management itself — is session-only. Keys cannot mint or revoke keys.
+
+### Managing keys
+
+| Method   | Endpoint             | Description                              |
+| -------- | -------------------- | ---------------------------------------- |
+| `GET`    | `/api/api-keys`      | List your active keys (prefix only)      |
+| `POST`   | `/api/api-keys`      | Create a key — returns the secret once   |
+| `DELETE` | `/api/api-keys/:id`  | Revoke a key, effective immediately      |
 
 ---
 

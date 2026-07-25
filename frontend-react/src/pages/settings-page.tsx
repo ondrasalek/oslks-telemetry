@@ -7,14 +7,15 @@ import {
     CardDescription,
 } from '@/components/ui/card';
 import { useCurrentUser } from '@/hooks/use-auth';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Code, User, Loader2, Plus, Trash2 } from 'lucide-react';
+import { User, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { ApiKeysCard } from '@/components/settings/api-keys-card';
 
 export function SettingsPage() {
     const queryClient = useQueryClient();
@@ -22,16 +23,6 @@ export function SettingsPage() {
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [profileName, setProfileName] = useState(user?.name || '');
     const [profileEmail, setProfileEmail] = useState(user?.email || '');
-    const [newKeyName, setNewKeyName] = useState('');
-    const [generatedKey, setGeneratedKey] = useState<string | null>(null);
-
-    const { data: apiKeys, isLoading: keysLoading } = useQuery<any[]>({
-        queryKey: ['api-keys'],
-        queryFn: async () => {
-            const { data } = await apiClient.get('/api/api_keys');
-            return data;
-        },
-    });
 
     const updateProfileMutation = useMutation({
         mutationFn: async (payload: { name: string; email: string }) => {
@@ -40,27 +31,6 @@ export function SettingsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['current-user'] });
             setIsEditingProfile(false);
-        },
-    });
-
-    const createKeyMutation = useMutation({
-        mutationFn: async (name: string) => {
-            const { data } = await apiClient.post('/api/api_keys', { name });
-            return data;
-        },
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: ['api-keys'] });
-            setGeneratedKey(data.api_key);
-            setNewKeyName('');
-        },
-    });
-
-    const deleteKeyMutation = useMutation({
-        mutationFn: async (id: string) => {
-            await apiClient.delete(`/api/api_keys/${id}`);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['api-keys'] });
         },
     });
 
@@ -178,101 +148,7 @@ export function SettingsPage() {
                     </CardContent>
                 </Card>
 
-                {/* API Keys Section */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>API Keys</CardTitle>
-                        <CardDescription>
-                            Generate tokens for external integrations.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className='space-y-4'>
-                        {/* New Key Form */}
-                        <div className='flex gap-2'>
-                            <Input
-                                placeholder='Key name (e.g. CLI)'
-                                value={newKeyName}
-                                onChange={(e) => setNewKeyName(e.target.value)}
-                            />
-                            <Button
-                                size='sm'
-                                disabled={
-                                    !newKeyName || createKeyMutation.isPending
-                                }
-                                onClick={() =>
-                                    createKeyMutation.mutate(newKeyName)
-                                }
-                            >
-                                {createKeyMutation.isPending ? (
-                                    <Loader2 className='h-4 w-4 animate-spin' />
-                                ) : (
-                                    <Plus className='h-4 w-4' />
-                                )}
-                                <span className='ml-2 hidden sm:inline'>
-                                    Create
-                                </span>
-                            </Button>
-                        </div>
-
-                        {generatedKey && (
-                            <div className='rounded-md bg-muted p-3'>
-                                <p className='mb-1 text-xs font-semibold uppercase text-muted-foreground'>
-                                    Your new key (copy it now!):
-                                </p>
-                                <code className='break-all text-sm font-mono font-bold text-primary'>
-                                    {generatedKey}
-                                </code>
-                                <Button
-                                    variant='ghost'
-                                    size='sm'
-                                    className='mt-2 h-auto p-0 text-xs'
-                                    onClick={() => setGeneratedKey(null)}
-                                >
-                                    Dismiss
-                                </Button>
-                            </div>
-                        )}
-
-                        {keysLoading ? (
-                            <Skeleton className='h-32 w-full' />
-                        ) : apiKeys && apiKeys.length > 0 ? (
-                            <div className='space-y-2'>
-                                {apiKeys.map((key) => (
-                                    <div
-                                        key={key.id}
-                                        className='flex items-center justify-between rounded-md border border-border p-3'
-                                    >
-                                        <div>
-                                            <p className='text-sm font-medium'>
-                                                {key.name}
-                                            </p>
-                                            <p className='text-xs text-muted-foreground font-mono'>
-                                                {key.key.substring(0, 8)}...
-                                            </p>
-                                        </div>
-                                        <Button
-                                            variant='ghost'
-                                            size='icon'
-                                            className='h-8 w-8 text-destructive hover:bg-destructive/10'
-                                            onClick={() =>
-                                                deleteKeyMutation.mutate(key.id)
-                                            }
-                                        >
-                                            <Trash2 className='h-4 w-4' />
-                                        </Button>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className='flex flex-col items-center justify-center py-6 border rounded-lg border-dashed'>
-                                <Code className='mb-2 h-8 w-8 text-muted-foreground' />
-                                <p className='text-sm text-muted-foreground text-center'>
-                                    No API keys yet.
-                                </p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                <ApiKeysCard />
             </div>
         </div>
     );

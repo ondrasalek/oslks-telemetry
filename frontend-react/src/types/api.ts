@@ -121,14 +121,20 @@ export interface TelemetryEvent {
     created_at: string;
 }
 
-/** API key */
+/** API key — the plaintext secret is never returned after creation */
 export interface ApiKey {
     id: string;
-    user_id: string;
     name: string;
-    key: string;
-    last_used_at: string | null;
+    key_prefix: string;
+    team_id: string | null;
+    team_name: string | null;
     created_at: string;
+    last_used_at: string | null;
+}
+
+/** Creation response — `key` is the full secret, shown exactly once */
+export interface CreatedApiKey extends ApiKey {
+    key: string;
 }
 
 /** System setting */

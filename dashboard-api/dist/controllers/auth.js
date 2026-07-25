@@ -40,8 +40,8 @@ export const login = async (req, res) => {
             email: user.email,
             name: user.name,
             role: user.role,
-            teamId: membership?.team_id || null,
-            teamRole: membership?.role || null,
+            team_id: membership?.team_id || null,
+            team_role: membership?.role || null,
         };
         res.json({ success: true, user: sessionUser });
     }
@@ -97,8 +97,8 @@ export const register = async (req, res) => {
                 email: user.email,
                 name: user.name,
                 role: user.role,
-                teamId: teamId,
-                teamRole: 'owner',
+                team_id: teamId,
+                team_role: 'owner',
             },
         });
     }
@@ -152,8 +152,8 @@ export const me = async (req, res) => {
             email: user.email,
             name: user.name,
             role: user.role,
-            teamId: membership?.team_id || null,
-            teamRole: membership?.role || null,
+            team_id: membership?.team_id || null,
+            team_role: membership?.role || null,
         });
     }
     catch (error) {

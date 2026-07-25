@@ -5,6 +5,9 @@ export const listWebsites = async (req: Request, res: Response) => {
     const userId = (req.session as any).userId;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
+    // A team-scoped API key only ever sees that team's websites.
+    const apiKeyTeamId = req.apiKey?.teamId ?? null;
+
     try {
         console.log(`[Websites] Listing websites for user ${userId}`);
         const websites = await sql`
@@ -13,6 +16,7 @@ export const listWebsites = async (req: Request, res: Response) => {
             JOIN team_members tm ON w.team_id = tm.team_id
             LEFT JOIN teams t ON w.team_id = t.id
             WHERE tm.user_id = ${userId}::uuid
+              AND (${apiKeyTeamId}::uuid IS NULL OR w.team_id = ${apiKeyTeamId}::uuid)
             ORDER BY w.is_pinned DESC, w.created_at DESC
         `;
 
@@ -32,8 +36,24 @@ export const createWebsite = async (req: Request, res: Response) => {
 
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
+    if (typeof domain !== 'string' || !domain.trim()) {
+        return res.status(400).json({ error: 'Domain is required' });
+    }
+
     try {
         let finalTeamId = team_id;
+
+        // A team-scoped API key pins the target team; it may not create
+        // websites for any other team, even one its owner belongs to.
+        const apiKeyTeamId = req.apiKey?.teamId ?? null;
+        if (apiKeyTeamId) {
+            if (finalTeamId && finalTeamId !== apiKeyTeamId) {
+                return res
+                    .status(403)
+                    .json({ error: 'API key is scoped to a different team' });
+            }
+            finalTeamId = apiKeyTeamId;
+        }
 
         // If no team_id provided, use user's primary team
         if (!finalTeamId) {
@@ -63,11 +83,18 @@ export const createWebsite = async (req: Request, res: Response) => {
 
         const [website] = await sql`
             INSERT INTO websites (name, domain, team_id, share_id)
-            VALUES (${name || null}, ${domain}, ${finalTeamId}::uuid, ${shareId})
+            VALUES (${name || null}, ${domain.trim()}, ${finalTeamId}::uuid, ${shareId})
             RETURNING *
         `;
         res.status(201).json(website);
     } catch (error) {
+        // Domain is UNIQUE — surface the conflict instead of a generic 500 so
+        // programmatic callers can react to it.
+        if ((error as { code?: string })?.code === '23505') {
+            return res
+                .status(409)
+                .json({ error: 'A website with this domain already exists' });
+        }
         console.error('Create website error:', error);
         res.status(500).json({ error: 'Failed to create website' });
     }
