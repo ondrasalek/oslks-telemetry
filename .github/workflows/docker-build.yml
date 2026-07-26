@@ -46,7 +46,7 @@ jobs:
                       ghcr.io/${{ github.repository_owner }}/oslks-radar:${{ github.sha }}
                   build-args: |
                       VITE_APP_URL=${{ secrets.VITE_APP_URL || 'https://radar.slks.cz' }}
-                      VITE_OSLKS_COLLECTOR_URL=${{ secrets.VITE_OSLKS_COLLECTOR_URL || 'https://radar.slks.cz' }}
-                      VITE_OSLKS_WEBSITE_ID=${{ secrets.VITE_OSLKS_WEBSITE_ID || 'default' }}
+                      VITE_OSLKS_COLLECTOR_URL=${{ secrets.VITE_OSLKS_COLLECTOR_URL || 'https://assets.slks.cz' }}
+                      VITE_OSLKS_WEBSITE_ID=${{ secrets.VITE_OSLKS_WEBSITE_ID || 'be6d2ce9-93f6-4a8b-8cc0-cbb39c443e17' }}
                   cache-from: type=gha
                   cache-to: type=gha,mode=max

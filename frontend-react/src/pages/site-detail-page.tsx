@@ -130,7 +130,11 @@ export function SiteDetailPage() {
     }
 
     const trackingHost = import.meta.env.VITE_APP_URL || window.location.origin;
-    const trackingCode = `<script defer data-website-id="${website.id}" data-host-url="${trackingHost}" src="${trackingHost}/assets/v1/lib/j"></script>`;
+    // The script is served from the /assets/v1 prefix, and the tracker posts to
+    // `<data-host-url>/v1/p`. Both must carry the prefix — dropping it from
+    // data-host-url points hits at /v1/p, which the SPA handler answers with 405.
+    const trackingBase = `${trackingHost}/assets/v1`;
+    const trackingCode = `<script defer data-website-id="${website.id}" data-host-url="${trackingBase}" src="${trackingBase}/lib/j"></script>`;
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(trackingCode);
@@ -470,7 +474,7 @@ export function SiteDetailPage() {
                             <pre className='overflow-x-auto rounded-md bg-muted p-4 text-xs text-muted-foreground whitespace-pre'>
                                 <code>
                                     {integrationTab === 'html'
-                                        ? `<!-- Add to <head> -->\n<script\n  defer\n  data-website-id="${website.id}"\n  data-host-url="${trackingHost}"\n  src="${trackingHost}/assets/v1/lib/j"\n></script>`
+                                        ? `<!-- Add to <head> -->\n<script\n  defer\n  data-website-id="${website.id}"\n  data-host-url="${trackingBase}"\n  src="${trackingBase}/lib/j"\n></script>`
                                         : integrationTab === 'react'
                                           ? `// components/Analytics.tsx
 import { useEffect, useRef } from 'react';
@@ -480,9 +484,9 @@ export function Analytics() {
 
   useEffect(() => {
     const script = document.createElement('script');
-    script.src = '${trackingHost}/assets/v1/lib/j';
+    script.src = '${trackingBase}/lib/j';
     script.setAttribute('data-website-id', '${website.id}');
-    script.setAttribute('data-host-url', '${trackingHost}');
+    script.setAttribute('data-host-url', '${trackingBase}');
     script.defer = true;
     document.head.appendChild(script);
     ref.current = script;
@@ -514,9 +518,9 @@ export default function RootLayout({
       <body>
         {children}
         <Script
-          src="${trackingHost}/assets/v1/lib/j"
+          src="${trackingBase}/lib/j"
           data-website-id="${website.id}"
-          data-host-url="${trackingHost}"
+          data-host-url="${trackingBase}"
           strategy="afterInteractive"
         />
       </body>
