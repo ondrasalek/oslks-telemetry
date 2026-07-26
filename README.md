@@ -49,6 +49,11 @@ graph TD
 
 Add the tracking script to the `<head>` of every page you want to track.
 
+> Automating this with an AI agent? Point it at
+> [`docs/AGENT-RUNBOOK.md`](docs/AGENT-RUNBOOK.md) — a step-by-step procedure for
+> registering a site via the API, whitelisting its origin, installing the
+> snippet, and verifying that hits actually land.
+
 ### Option A: Direct (simplest)
 
 Point directly at the collector backend:
@@ -151,7 +156,35 @@ Events are sent via `sendBeacon` (preferred) or `fetch` with `keepalive`.
 | Attribute | Required | Description |
 |:---|:---|:---|
 | `data-website-id` | ✅ | UUID of the website (from the Dashboard) |
-| `data-host-url` | ❌ | Override the collector URL (defaults to script origin) |
+| `data-host-url` | ✅ | Base URL of the collector. The tracker posts to `<data-host-url>/v1/p` |
+
+> **`data-host-url` is effectively required.** Without it the tracker falls back to
+> the script's *directory* — `…/lib/j` becomes `…/lib`, so hits are posted to
+> `/lib/v1/p`, which does not exist and returns 404. Always set it explicitly.
+
+### ⚠️ Whitelist the tracked site's origin
+
+The collector runs CORS in **whitelist mode**. Hits are posted as
+`application/json`, which triggers a CORS preflight, so a site whose origin is
+missing from `CORS_ALLOWED_ORIGINS` is **silently dropped by the browser** — no
+server-side error, no events, nothing in the logs.
+
+Every tracked domain must be added to `CORS_ALLOWED_ORIGINS` (comma-separated),
+and the app redeployed:
+
+```bash
+CORS_ALLOWED_ORIGINS=https://radar.example.com,https://site-one.com,https://site-two.com
+```
+
+Verify a site is whitelisted — the response **must** contain
+`access-control-allow-origin`:
+
+```bash
+curl -si -X OPTIONS https://YOUR_COLLECTOR_URL/v1/p \
+     -H 'Origin: https://site-one.com' \
+     -H 'Access-Control-Request-Method: POST' \
+     -H 'Access-Control-Request-Headers: content-type' | grep -i access-control-allow-origin
+```
 
 ---
 
