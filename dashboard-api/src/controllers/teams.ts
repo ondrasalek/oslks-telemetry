@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { randomBytes } from 'crypto';
 import sql from '../lib/db.js';
+import { escapeHtml, getAppUrl, getSmtpConfig, sendMail } from '../lib/mailer.js';
 
 export const listTeams = async (req: Request, res: Response) => {
     const userId = (req.session as any).userId;
@@ -27,11 +28,16 @@ export const getTeam = async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
+        const [viewer] = await sql`SELECT role FROM users WHERE id = ${userId}::uuid`;
+        const superuser = viewer?.role === 'superuser';
         const teams = await sql`
             SELECT t.id, t.name, t.slug, t.icon_url, t.created_at, t.updated_at
             FROM teams t
-            JOIN team_members tm ON t.id = tm.team_id
-            WHERE t.id = ${id}::uuid AND tm.user_id = ${userId}::uuid
+            WHERE t.id = ${id}::uuid
+              AND (${superuser}::boolean OR EXISTS (
+                  SELECT 1 FROM team_members tm
+                  WHERE tm.team_id = t.id AND tm.user_id = ${userId}::uuid
+              ))
             LIMIT 1
         `;
 
@@ -371,8 +377,37 @@ export const createInvite = async (req: Request, res: Response) => {
                 invited_by = EXCLUDED.invited_by,
                 expires_at = EXCLUDED.expires_at
         `;
-        // No mailer is wired into the API yet, so hand the link back to the caller.
-        res.json({ success: true, token });
+
+        const smtp = await getSmtpConfig();
+        if (!smtp) {
+            // No mailer configured: the caller can still share the link by hand.
+            return res.json({ success: true, token });
+        }
+
+        const [row] = await sql`
+            SELECT t.name AS team_name, u.name AS inviter
+            FROM teams t, users u
+            WHERE t.id = ${id}::uuid AND u.id = ${userId}::uuid
+        `;
+        const link = `${await getAppUrl(req)}/invite/accept?token=${token}`;
+        const teamName = row?.team_name ?? 'a team';
+        const inviter = row?.inviter ?? 'A teammate';
+
+        try {
+            await sendMail(smtp, {
+                to: email,
+                subject: `${inviter} invited you to ${teamName} on OSLKS Radar`,
+                text: `${inviter} invited you to join ${teamName} on OSLKS Radar.\n\nAccept the invitation: ${link}\n\nThis link expires in 7 days.`,
+                html: `<p>${escapeHtml(inviter)} invited you to join <strong>${escapeHtml(teamName)}</strong> on OSLKS Radar.</p><p><a href="${link}">Accept the invitation</a></p><p>This link expires in 7 days.</p>`,
+            });
+        } catch (mailError) {
+            console.error('Invite email error:', mailError);
+            return res.json({
+                success: false,
+                error: `Invite saved, but the email could not be sent: ${(mailError as Error).message}`,
+            });
+        }
+        res.json({ success: true });
     } catch (error) {
         console.error('Create invite error:', error);
         res.status(500).json({ success: false, error: 'Failed to create invite' });

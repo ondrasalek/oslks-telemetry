@@ -135,15 +135,6 @@ app.get('/health', (req, res) => {
     });
 });
 
-app.get('/api/users/count', async (req, res) => {
-    try {
-        const result = await sql`SELECT count(*)::int FROM users`;
-        res.json({ count: result[0]?.count || 0 });
-    } catch (error) {
-        res.status(500).json({ error: 'Database connection failed' });
-    }
-});
-
 app.listen(Number(port), '0.0.0.0', () => {
     console.log(`Dashboard API listening on port ${port} (on 0.0.0.0)`);
 });

@@ -20,6 +20,7 @@
         "@types/express-session": "^1.18.2",
         "@types/jsonwebtoken": "^9.0.10",
         "@types/node": "^25.3.5",
+        "@types/nodemailer": "^7.0.12",
         "@types/pg": "^8.18.0",
         "ts-node": "^10.9.2",
         "typescript": "^5.9.3"
@@ -32,6 +33,7 @@
         "express": "^5.2.1",
         "express-session": "^1.19.0",
         "jsonwebtoken": "^9.0.3",
+        "nodemailer": "^7.0.13",
         "pg": "^8.20.0",
         "postgres": "^3.4.8"
     }

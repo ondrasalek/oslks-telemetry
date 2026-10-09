@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import sql from '../lib/db.js';
+import { isSuperuserSession } from '../lib/access.js';
 
 export const getStats = async (req: Request, res: Response) => {
     const { website_id } = req.params as { website_id: string };
@@ -23,10 +24,12 @@ export const getStats = async (req: Request, res: Response) => {
         console.log(
             `[Analytics] Fetching stats for website ${website_id} (User: ${userId})`,
         );
+        const superuser = await isSuperuserSession(req, userId);
         const websitesData = await sql`
             SELECT 1 FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id}::uuid AND tm.user_id = ${userId}::uuid
+            WHERE w.id = ${website_id}::uuid AND (${superuser}::boolean OR EXISTS (
+                SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+            ))
             LIMIT 1
         `;
         if (websitesData.length === 0) {
@@ -98,10 +101,12 @@ export const getMetrics = async (req: Request, res: Response) => {
     }
 
     try {
+        const superuser = await isSuperuserSession(req, userId);
         const websitesData = await sql`
             SELECT 1 FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id} AND tm.user_id = ${userId}
+            WHERE w.id = ${website_id}::uuid AND (${superuser}::boolean OR EXISTS (
+                SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+            ))
             LIMIT 1
         `;
         if (websitesData.length === 0)
@@ -135,10 +140,12 @@ export const getActiveVisitors = async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
+        const superuser = await isSuperuserSession(req, userId);
         const websitesData = await sql`
             SELECT 1 FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id} AND tm.user_id = ${userId}
+            WHERE w.id = ${website_id}::uuid AND (${superuser}::boolean OR EXISTS (
+                SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+            ))
             LIMIT 1
         `;
         if (websitesData.length === 0)
@@ -165,10 +172,12 @@ export const getChartData = async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
+        const superuser = await isSuperuserSession(req, userId);
         const websitesData = await sql`
             SELECT 1 FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id} AND tm.user_id = ${userId}
+            WHERE w.id = ${website_id}::uuid AND (${superuser}::boolean OR EXISTS (
+                SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+            ))
             LIMIT 1
         `;
         if (websitesData.length === 0)
@@ -212,11 +221,13 @@ export const getTeamStats = async (req: Request, res: Response) => {
 
     try {
         // Permission check: Is user a member of the team?
-        const members = await sql`
-            SELECT 1 FROM team_members 
-            WHERE team_id = ${team_id}::uuid AND user_id = ${userId}::uuid
-            LIMIT 1
-        `;
+        const members = (await isSuperuserSession(req, userId))
+            ? [1]
+            : await sql`
+                SELECT 1 FROM team_members
+                WHERE team_id = ${team_id}::uuid AND user_id = ${userId}::uuid
+                LIMIT 1
+            `;
         if (members.length === 0)
             return res.status(403).json({ error: 'Forbidden' });
 

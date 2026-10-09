@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import sql from '../lib/db.js';
+import { isSuperuserSession } from '../lib/access.js';
 
 export const listWebsites = async (req: Request, res: Response) => {
     const userId = (req.session as any).userId;
@@ -9,6 +10,20 @@ export const listWebsites = async (req: Request, res: Response) => {
     const apiKeyTeamId = req.apiKey?.teamId ?? null;
 
     try {
+        // Session users see the active team's sites: the team they switched to,
+        // else their first team (same rule as /api/auth/me).
+        const [active] = req.apiKey
+            ? [{ team_id: null }]
+            : await sql`
+                SELECT tm.team_id
+                FROM team_members tm
+                JOIN users u ON u.id = tm.user_id
+                WHERE tm.user_id = ${userId}::uuid
+                ORDER BY (tm.team_id = u.current_team_id) DESC, tm.joined_at ASC
+                LIMIT 1
+            `;
+        const activeTeamId = active?.team_id ?? null;
+
         console.log(`[Websites] Listing websites for user ${userId}`);
         const websites = await sql`
             SELECT w.*, t.name as team_name,
@@ -18,6 +33,7 @@ export const listWebsites = async (req: Request, res: Response) => {
             LEFT JOIN teams t ON w.team_id = t.id
             WHERE tm.user_id = ${userId}::uuid
               AND (${apiKeyTeamId}::uuid IS NULL OR w.team_id = ${apiKeyTeamId}::uuid)
+              AND (${req.apiKey ? true : false}::boolean OR w.team_id = ${activeTeamId}::uuid)
             ORDER BY w.is_pinned DESC, w.created_at DESC
         `;
 
@@ -59,8 +75,11 @@ export const createWebsite = async (req: Request, res: Response) => {
         // If no team_id provided, use user's primary team
         if (!finalTeamId) {
             const memberships = await sql`
-                SELECT team_id FROM team_members 
-                WHERE user_id = ${userId}::uuid 
+                SELECT tm.team_id
+                FROM team_members tm
+                JOIN users u ON u.id = tm.user_id
+                WHERE tm.user_id = ${userId}::uuid
+                ORDER BY (tm.team_id = u.current_team_id) DESC, tm.joined_at ASC
                 LIMIT 1
             `;
             if (memberships.length > 0) {
@@ -109,12 +128,16 @@ export const getWebsite = async (req: Request, res: Response) => {
 
     try {
         console.log(`[Websites] Fetching website ${id} for user ${userId}`);
+        const superuser = await isSuperuserSession(req, userId);
         const websites = await sql`
             SELECT w.*,
                    (SELECT MAX(e.created_at) FROM events e WHERE e.website_id = w.id) AS last_event_at
             FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${id as string}::uuid AND tm.user_id = ${userId}::uuid
+            WHERE w.id = ${id as string}::uuid
+              AND (${superuser}::boolean OR EXISTS (
+                  SELECT 1 FROM team_members tm
+                  WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+              ))
             LIMIT 1
         `;
         const website = websites[0];
@@ -160,11 +183,13 @@ export const listTeamWebsites = async (req: Request, res: Response) => {
 
     try {
         // Verify user is in the team
-        const members = await sql`
-            SELECT 1 FROM team_members 
-            WHERE team_id = ${team_id}::uuid AND user_id = ${userId}::uuid
-            LIMIT 1
-        `;
+        const members = (await isSuperuserSession(req, userId))
+            ? [1]
+            : await sql`
+                SELECT 1 FROM team_members
+                WHERE team_id = ${team_id}::uuid AND user_id = ${userId}::uuid
+                LIMIT 1
+            `;
         if (members.length === 0)
             return res.status(403).json({ error: 'Forbidden' });
 

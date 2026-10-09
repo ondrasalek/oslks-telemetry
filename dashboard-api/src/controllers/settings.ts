@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import sql from '../lib/db.js';
+import { getSmtpConfig, sendMail } from '../lib/mailer.js';
 
 export const getGeneralSettings = async (req: Request, res: Response) => {
     const userId = (req.session as any).userId;
@@ -75,15 +76,42 @@ const saveSetting = (key: 'general' | 'smtp') => async (req: Request, res: Respo
 export const saveGeneralSettings = saveSetting('general');
 export const saveSmtpSettings = saveSetting('smtp');
 
-export const sendTestEmail = (_req: Request, res: Response) => {
-    res.status(501).json({
-        success: false,
-        error: 'Sending email is not available yet',
-    });
+export const sendTestEmail = async (req: Request, res: Response) => {
+    const userId = (req.session as any).userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        const [user] = await sql`SELECT role, email FROM users WHERE id = ${userId}::uuid LIMIT 1`;
+        if (user?.role !== 'superuser') {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const config = await getSmtpConfig();
+        if (!config) {
+            return res.json({ success: false, error: 'SMTP is not configured' });
+        }
+
+        await sendMail(config, {
+            to: user.email,
+            subject: 'OSLKS Radar test email',
+            text: 'SMTP is configured correctly. You can now send team invitations.',
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Test email error:', error);
+        res.json({
+            success: false,
+            error: `Could not send email: ${(error as Error).message}`,
+        });
+    }
 };
 
 /** Public feature flags the UI uses to decide what to render. */
-export const getEnvConfig = (_req: Request, res: Response) => {
-    // The API has no mailer, so email-based flows (invites) stay hidden.
-    res.json({ smtp_enabled: false });
+export const getEnvConfig = async (_req: Request, res: Response) => {
+    try {
+        res.json({ smtp_enabled: (await getSmtpConfig()) !== null });
+    } catch (error) {
+        console.error('Env config error:', error);
+        res.json({ smtp_enabled: false });
+    }
 };
