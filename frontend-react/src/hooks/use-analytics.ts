@@ -6,6 +6,8 @@ import type {
     MetricData,
     MetricType,
     DateRange,
+    CountryStat,
+    RealtimeData,
 } from '@/types/api';
 
 // ── Query Keys ───────────────────────────────────────────
@@ -108,6 +110,38 @@ export function useActiveVisitors(websiteId: string) {
         },
         enabled: !!websiteId,
         refetchInterval: 30_000,
+    });
+}
+
+/** Distinct visitors per country, for the map. */
+export function useCountryStats(websiteId: string, range: DateRange) {
+    return useQuery<CountryStat[]>({
+        queryKey: ['analytics', 'countries', websiteId, range] as const,
+        queryFn: async () => {
+            const params = new URLSearchParams();
+            if (range.from) params.append('start_at', range.from);
+            if (range.to) params.append('end_at', range.to);
+            const { data } = await apiClient.get<CountryStat[]>(
+                `/api/analytics/${websiteId}/countries?${params.toString()}`,
+            );
+            return data;
+        },
+        enabled: !!websiteId,
+    });
+}
+
+/** Last-30-minutes snapshot. Polls every 10s while the tab is visible. */
+export function useRealtime(websiteId: string, enabled = true) {
+    return useQuery<RealtimeData>({
+        queryKey: ['analytics', 'realtime', websiteId] as const,
+        queryFn: async () => {
+            const { data } = await apiClient.get<RealtimeData>(
+                `/api/analytics/${websiteId}/realtime`,
+            );
+            return data;
+        },
+        enabled: !!websiteId && enabled,
+        refetchInterval: 10_000,
     });
 }
 

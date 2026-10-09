@@ -164,6 +164,127 @@ export const getActiveVisitors = async (req: Request, res: Response) => {
     }
 };
 
+/** Resolves a website the caller may read, or sends the error response and returns null. */
+const requireWebsiteAccess = async (
+    req: Request,
+    res: Response,
+    websiteId: string,
+): Promise<boolean> => {
+    const userId = (req.session as any).userId;
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return false;
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(websiteId)) {
+        res.status(404).json({ error: 'Website not found' });
+        return false;
+    }
+    const superuser = await isSuperuserSession(req, userId);
+    const rows = await sql`
+        SELECT 1 FROM websites w
+        WHERE w.id = ${websiteId}::uuid AND (${superuser}::boolean OR EXISTS (
+            SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+        ))
+        LIMIT 1
+    `;
+    if (rows.length === 0) {
+        res.status(404).json({ error: 'Website not found' });
+        return false;
+    }
+    return true;
+};
+
+/** Distinct visitors per country for the map (the generic /metrics counts raw events). */
+export const getCountryStats = async (req: Request, res: Response) => {
+    const { website_id } = req.params as { website_id: string };
+    const { start_at, end_at } = req.query;
+
+    try {
+        if (!(await requireWebsiteAccess(req, res, website_id))) return;
+
+        const countries = await sql`
+            SELECT country AS value,
+                   COUNT(DISTINCT session_id)::int AS visitors,
+                   COUNT(*)::int AS views
+            FROM events
+            WHERE website_id = ${website_id}::uuid
+              AND country IS NOT NULL
+              AND (${(start_at as string) || null}::timestamptz IS NULL OR created_at >= ${(start_at as string) || null}::timestamptz)
+              AND (${(end_at as string) || null}::timestamptz IS NULL OR created_at <= ${(end_at as string) || null}::timestamptz)
+            GROUP BY country
+            ORDER BY visitors DESC
+        `;
+        res.json(countries);
+    } catch (error) {
+        console.error('Country stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch country stats' });
+    }
+};
+
+const REALTIME_MINUTES = 30;
+
+/** Last-30-minutes snapshot: totals, a per-minute series, top pages and countries. */
+export const getRealtime = async (req: Request, res: Response) => {
+    const { website_id } = req.params as { website_id: string };
+
+    try {
+        if (!(await requireWebsiteAccess(req, res, website_id))) return;
+
+        const [totals] = await sql`
+            SELECT COUNT(DISTINCT session_id)::int AS visitors,
+                   COUNT(*)::int AS views,
+                   COUNT(DISTINCT session_id) FILTER (WHERE created_at >= NOW() - INTERVAL '5 minutes')::int AS active
+            FROM events
+            WHERE website_id = ${website_id}::uuid
+              AND created_at >= NOW() - make_interval(mins => ${REALTIME_MINUTES})
+        `;
+
+        // generate_series gives every minute a bucket, so quiet minutes show as zero.
+        const per_minute = await sql`
+            SELECT m.minute AS timestamp,
+                   COALESCE(COUNT(DISTINCT e.session_id), 0)::int AS visitors,
+                   COUNT(e.session_id)::int AS views
+            FROM generate_series(
+                date_trunc('minute', NOW()) - make_interval(mins => ${REALTIME_MINUTES - 1}),
+                date_trunc('minute', NOW()),
+                INTERVAL '1 minute'
+            ) AS m(minute)
+            LEFT JOIN events e
+              ON e.website_id = ${website_id}::uuid
+             AND e.created_at >= m.minute
+             AND e.created_at < m.minute + INTERVAL '1 minute'
+            GROUP BY m.minute
+            ORDER BY m.minute ASC
+        `;
+
+        const top = (column: 'url' | 'country', limit: number) => sql`
+            SELECT ${sql(column)} AS value, COUNT(DISTINCT session_id)::int AS visitors
+            FROM events
+            WHERE website_id = ${website_id}::uuid
+              AND created_at >= NOW() - make_interval(mins => ${REALTIME_MINUTES})
+              AND ${sql(column)} IS NOT NULL
+            GROUP BY ${sql(column)}
+            ORDER BY visitors DESC
+            LIMIT ${limit}
+        `;
+        // Countries are unbounded (the map shades all of them); the UI trims its list.
+        const [pages, countries] = await Promise.all([top('url', 8), top('country', 300)]);
+
+        res.json({
+            window_minutes: REALTIME_MINUTES,
+            visitors: totals?.visitors ?? 0,
+            views: totals?.views ?? 0,
+            active: totals?.active ?? 0,
+            per_minute,
+            pages,
+            countries,
+        });
+    } catch (error) {
+        console.error('Realtime error:', error);
+        res.status(500).json({ error: 'Failed to fetch realtime data' });
+    }
+};
+
 export const getChartData = async (req: Request, res: Response) => {
     const { website_id } = req.params as { website_id: string };
     const { start_at, end_at, interval } = req.query;

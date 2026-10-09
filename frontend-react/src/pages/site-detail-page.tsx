@@ -35,6 +35,8 @@ import {
 } from '@/components/ui/select';
 import { AnalyticsChart } from '@/components/analytics/analytics-chart';
 import { MetricsCard } from '@/components/analytics/metrics-card';
+import { CountryMapCard } from '@/components/analytics/country-map-card';
+import { RealtimePanel } from '@/components/analytics/realtime-panel';
 import { DateFilter } from '@/components/analytics/date-filter';
 import { getDateRangeFromFilter } from '@/lib/dates';
 import {
@@ -62,7 +64,7 @@ function formatDuration(seconds: number) {
 export function SiteDetailPage() {
     const { id } = useParams<{ id: string }>();
     const { data: website, isLoading, isFetching } = useWebsite(id ?? '');
-    const [activeTab, setActiveTab] = useState<'overview' | 'settings'>(
+    const [activeTab, setActiveTab] = useState<'overview' | 'realtime' | 'settings'>(
         'overview',
     );
 
@@ -176,6 +178,17 @@ export function SiteDetailPage() {
                         )}
                     >
                         Overview
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('realtime')}
+                        className={cn(
+                            'pb-2 mt-2 -mb-2 border-b-2 font-medium transition-colors hover:text-primary',
+                            activeTab === 'realtime'
+                                ? 'border-primary text-primary'
+                                : 'text-muted-foreground border-transparent',
+                        )}
+                    >
+                        Realtime
                     </button>
                     <button
                         onClick={() => setActiveTab('settings')}
@@ -294,6 +307,11 @@ export function SiteDetailPage() {
                         </CardContent>
                     </Card>
 
+                    <CountryMapCard
+                        websiteId={website.id}
+                        range={{ from, to }}
+                    />
+
                     {/* Detailed Metrics Grid */}
                     <div className='grid gap-6 md:grid-cols-2'>
                         <MetricsCard
@@ -326,6 +344,8 @@ export function SiteDetailPage() {
                         />
                     </div>
                 </div>
+            ) : activeTab === 'realtime' ? (
+                <RealtimePanel websiteId={website.id} />
             ) : (
                 <div className='grid gap-6 md:grid-cols-2 animate-in fade-in duration-500'>
                     {/* General Settings */}

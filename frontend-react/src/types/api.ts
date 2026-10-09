@@ -96,6 +96,25 @@ export interface MetricData {
     count: number;
 }
 
+/** Distinct visitors per country (ISO 3166-1 alpha-2 in `value`). */
+export interface CountryStat {
+    value: string;
+    visitors: number;
+    views: number;
+}
+
+/** Last-30-minutes snapshot for the realtime view. */
+export interface RealtimeData {
+    window_minutes: number;
+    visitors: number;
+    views: number;
+    /** Distinct visitors in the last 5 minutes. */
+    active: number;
+    per_minute: ChartDataPoint[];
+    pages: { value: string; visitors: number }[];
+    countries: { value: string; visitors: number }[];
+}
+
 /** Metric type enumeration */
 export type MetricType =
     | 'url'

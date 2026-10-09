@@ -25,6 +25,17 @@ router.get(
     analyticsController.getActiveVisitors,
 );
 
+router.get(
+    '/:website_id/realtime',
+    enforceApiKeyTeamScope,
+    analyticsController.getRealtime,
+);
+router.get(
+    '/:website_id/countries',
+    enforceApiKeyTeamScope,
+    analyticsController.getCountryStats,
+);
+
 // Team stats
 router.get(
     '/team/:team_id/stats',
