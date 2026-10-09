@@ -5,7 +5,8 @@
 
 use moka::future::Cache;
 use sqlx::PgPool;
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -18,6 +19,10 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct DomainCache {
     inner: Cache<Uuid, String>,
+    /// Normalized hosts (lowercase, no scheme/port/`www.`) of all registered
+    /// websites. Kept in a sync set so the CORS layer can consult it from a
+    /// non-async predicate.
+    hosts: Arc<RwLock<HashSet<String>>>,
 }
 
 impl DomainCache {
@@ -31,7 +36,10 @@ impl DomainCache {
             .time_to_live(Duration::from_secs(ttl_seconds))
             .build();
 
-        Self { inner: cache }
+        Self {
+            inner: cache,
+            hosts: Arc::new(RwLock::new(HashSet::new())),
+        }
     }
 
     /// Warm the cache by loading all websites from the database.
@@ -44,6 +52,7 @@ impl DomainCache {
                 .await?;
 
         let count = rows.len();
+        self.replace_hosts(rows.iter().map(|(_, d)| d.as_str()));
         for (id, domain) in rows {
             self.inner.insert(id, domain).await;
         }
@@ -63,12 +72,48 @@ impl DomainCache {
                 .await?;
 
         let count = rows.len();
+        self.replace_hosts(rows.iter().map(|(_, d)| d.as_str()));
         for (id, domain) in rows {
             self.inner.insert(id, domain).await;
         }
 
         tracing::debug!("Domain cache refreshed with {} websites", count);
         Ok(count)
+    }
+
+    fn replace_hosts<'a>(&self, domains: impl Iterator<Item = &'a str>) {
+        let set: HashSet<String> = domains.filter_map(normalize_host).collect();
+        if let Ok(mut guard) = self.hosts.write() {
+            *guard = set;
+        }
+    }
+
+    /// Sync check used by the CORS layer: is `origin` the apex, `www.` or any
+    /// subdomain of a registered website's domain?
+    ///
+    /// Only http(s) origins are considered. Unknown origins are denied, so the
+    /// browser blocks the preflight for sites that are not registered.
+    pub fn is_registered_origin(&self, origin: &str) -> bool {
+        if !(origin.starts_with("https://") || origin.starts_with("http://")) {
+            return false;
+        }
+        let Some(host) = normalize_host(origin) else {
+            return false;
+        };
+        let Ok(hosts) = self.hosts.read() else {
+            return false;
+        };
+        // Walk up the labels: a.b.example.com -> b.example.com -> example.com
+        let mut candidate = host.as_str();
+        loop {
+            if hosts.contains(candidate) {
+                return true;
+            }
+            match candidate.split_once('.') {
+                Some((_, rest)) if rest.contains('.') => candidate = rest,
+                _ => return false,
+            }
+        }
     }
 
     /// O(1) lookup: get the cached domain for a website_id.
@@ -156,6 +201,17 @@ impl std::fmt::Display for OriginError {
     }
 }
 
+/// Lowercased host without scheme, port or leading `www.`; `None` if empty.
+fn normalize_host(raw: &str) -> Option<String> {
+    let host = extract_host(raw.trim()).to_ascii_lowercase();
+    let host = host.strip_prefix("www.").unwrap_or(&host);
+    if host.is_empty() {
+        None
+    } else {
+        Some(host.to_string())
+    }
+}
+
 /// Extract the host portion from an origin or URL string.
 ///
 /// Examples:
@@ -225,6 +281,23 @@ mod tests {
         );
         assert_eq!(extract_host("example.com"), "example.com");
         assert_eq!(extract_host("https://example.com:443"), "example.com");
+    }
+
+    #[test]
+    fn test_registered_origin_cors() {
+        let cache = DomainCache::new(100, 300);
+        cache.replace_hosts(["hrnkystrikem.cz", "https://Other.com/"].into_iter());
+
+        assert!(cache.is_registered_origin("https://hrnkystrikem.cz"));
+        assert!(cache.is_registered_origin("https://www.hrnkystrikem.cz"));
+        assert!(cache.is_registered_origin("https://shop.hrnkystrikem.cz"));
+        assert!(cache.is_registered_origin("https://a.b.hrnkystrikem.cz:8443"));
+        assert!(cache.is_registered_origin("https://other.com"));
+        assert!(!cache.is_registered_origin("https://evilhrnkystrikem.cz"));
+        assert!(!cache.is_registered_origin("https://hrnkystrikem.cz.evil.com"));
+        assert!(!cache.is_registered_origin("https://cz"));
+        assert!(!cache.is_registered_origin("null"));
+        assert!(!cache.is_registered_origin("hrnkystrikem.cz"));
     }
 
     #[tokio::test]

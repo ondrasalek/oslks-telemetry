@@ -60,40 +60,25 @@ curl -sS https://radar.slks.cz/api/websites \
 
 ---
 
-## 2. ⚠️ Whitelist the site's origin — **blocking, and not skippable**
+## 2. Verify the origin is allowed (CORS)
 
-The collector runs CORS in whitelist mode. The tracker posts
-`application/json`, which forces a CORS preflight. If the site's origin is not
-whitelisted, **the browser drops every hit before it leaves the page**: no
-network error the site can catch, no server log, no events. The setup looks
-completely fine and collects nothing.
+The collector automatically allows CORS for every registered website: the apex
+domain, `www.` and any subdomain. A newly registered site is picked up within
+5 minutes (the domain cache refresh), no redeploy needed.
 
-Check the current state first:
+Check — the response **must** contain `access-control-allow-origin`:
 
 ```bash
 curl -si -X OPTIONS https://assets.slks.cz/v1/p \
-     -H 'Origin: https://example.com' \
+     -H 'Origin: https://www.example.com' \
      -H 'Access-Control-Request-Method: POST' \
      -H 'Access-Control-Request-Headers: content-type' \
   | grep -i 'access-control-allow-origin'
 ```
 
-- **Prints a header** → whitelisted, go to step 3.
-- **Prints nothing** → blocked. The `200` on the preflight is meaningless; the
-  absence of `access-control-allow-origin` is what matters.
-
-**You almost certainly cannot fix this yourself** — it lives in the Radar
-deployment's environment, not in this repo. Stop and tell the operator:
-
-> `https://example.com` must be appended to `CORS_ALLOWED_ORIGINS` on the Radar
-> app (Coolify → oslks/oslks-telemetry-radar → Environment Variables), then the
-> app redeployed. Tracking cannot work until this is done.
-
-Include both apex and `www` if both serve pages. Origins are scheme + host, no
-trailing slash, comma-separated.
-
-Do not proceed to "verified working" without this. Re-run the check after the
-operator confirms the redeploy.
+If nothing prints, wait up to 5 minutes after step 1 and retry. If it still
+fails, the registered domain doesn't match the site's origin. The `200` on the
+preflight is meaningless; only the header counts.
 
 ---
 
@@ -205,7 +190,7 @@ Browser-side check: DevTools → Network → filter `v1/p`. You want `POST` →
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | No requests to `v1/p` at all | Script not on the page, or `data-website-id` missing (console warns `Setup failed`) | Confirm the tag is in the served HTML, not just the source |
-| CORS error in console | Origin not whitelisted | Step 2 — operator must update `CORS_ALLOWED_ORIGINS` and redeploy |
+| CORS error in console | Domain not registered, or registered < 5 min ago | Step 2 — check the registered domain matches the site's origin; retry after 5 min |
 | `404` on `…/lib/v1/p` | `data-host-url` missing | Add it explicitly |
 | `TypeError … getAttribute of null` | Script injected dynamically | Use a literal `<script>` tag |
 | Requests `202` but dashboard empty | Wrong `data-website-id` | Re-check the UUID against `GET /api/websites` |

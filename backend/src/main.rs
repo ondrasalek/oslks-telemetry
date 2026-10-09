@@ -31,7 +31,7 @@ use api::{collect, health, health_detailed, get_script, ws::ws_handler, AppState
 use config::Config;
 
 /// Build CORS layer based on configuration
-fn build_cors_layer(config: &Config) -> CorsLayer {
+fn build_cors_layer(config: &Config, domains: Arc<domain_cache::DomainCache>) -> CorsLayer {
     // FIX: Comprehensive list of allowed headers.
     // When allow_credentials(true) is used, wildcard '*' is strictly forbidden.
     // Added ORIGIN and common tracking headers.
@@ -54,8 +54,16 @@ fn build_cors_layer(config: &Config) -> CorsLayer {
                 .filter_map(|origin| origin.parse().ok())
                 .collect();
 
+            // Static whitelist OR any origin belonging to a registered website
+            // (apex, www and subdomains), so new sites need no redeploy.
             CorsLayer::new()
-                .allow_origin(allowed_origins)
+                .allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _| {
+                    allowed_origins.contains(origin)
+                        || origin
+                            .to_str()
+                            .map(|o| domains.is_registered_origin(o))
+                            .unwrap_or(false)
+                }))
                 .allow_methods(allowed_methods)
                 .allow_headers(allowed_headers)
                 .allow_credentials(true)
@@ -156,7 +164,7 @@ async fn main() -> Result<()> {
     );
 
     // Configure CORS based on environment
-    let cors = build_cors_layer(&config);
+    let cors = build_cors_layer(&config, Arc::clone(&domain_cache));
 
     // Initialize GeoIP reader if path is provided
     let geoip_reader = if let Some(path) = &config.geoip_db_path {
