@@ -50,9 +50,11 @@ export const login = async (req: Request, res: Response) => {
 
         // Fetch primary team membership
         const memberships = await sql`
-            SELECT team_id, role
-            FROM team_members
-            WHERE user_id = ${user.id}::uuid
+            SELECT tm.team_id, tm.role
+            FROM team_members tm
+            JOIN users u ON u.id = tm.user_id
+            WHERE tm.user_id = ${user.id}::uuid
+            ORDER BY (tm.team_id = u.current_team_id) DESC, tm.joined_at ASC
             LIMIT 1
         `;
         const membership = memberships[0];
@@ -107,8 +109,8 @@ export const register = async (req: Request, res: Response) => {
 
             // Create a default "Personal" team for the user
             const [team] = await tx`
-                INSERT INTO teams (name)
-                VALUES ('Personal')
+                INSERT INTO teams (name, slug)
+                VALUES ('Personal', ${'personal-' + Math.random().toString(36).substring(2, 8)})
                 RETURNING id
             `;
 
@@ -188,9 +190,11 @@ export const me = async (req: Request, res: Response) => {
         }
 
         const memberships = await sql`
-            SELECT team_id, role
-            FROM team_members
-            WHERE user_id = ${user.id}::uuid
+            SELECT tm.team_id, tm.role
+            FROM team_members tm
+            JOIN users u ON u.id = tm.user_id
+            WHERE tm.user_id = ${user.id}::uuid
+            ORDER BY (tm.team_id = u.current_team_id) DESC, tm.joined_at ASC
             LIMIT 1
         `;
         const membership = memberships[0];

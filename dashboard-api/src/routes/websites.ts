@@ -5,6 +5,7 @@ import { enforceApiKeyTeamScope } from '../middleware/apiKeyAuth.js';
 const router = Router();
 
 router.get('/all', websiteController.listAllWebsites);
+router.get('/shared/:share_id', websiteController.getSharedWebsite);
 router.get(
     '/team/:team_id',
     enforceApiKeyTeamScope,

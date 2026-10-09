@@ -369,3 +369,22 @@ export const transferWebsite = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to transfer website' });
     }
 };
+
+/** Public, unauthenticated view of a shared website (only what the share page needs). */
+export const getSharedWebsite = async (req: Request, res: Response) => {
+    const shareId = req.params.share_id as string;
+
+    try {
+        const [website] = await sql`
+            SELECT id, domain, name, icon_url, status, share_id, share_config, created_at
+            FROM websites
+            WHERE share_id = ${shareId}
+            LIMIT 1
+        `;
+        if (!website) return res.status(404).json({ error: 'Website not found' });
+        res.json(website);
+    } catch (error) {
+        console.error('Get shared website error:', error);
+        res.status(500).json({ error: 'Failed to fetch website' });
+    }
+};

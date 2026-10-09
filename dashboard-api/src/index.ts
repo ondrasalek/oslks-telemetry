@@ -7,6 +7,8 @@ import authRoutes from './routes/auth.js';
 import websiteRoutes from './routes/websites.js';
 import analyticsRoutes from './routes/analytics.js';
 import apiKeyRoutes from './routes/api-keys.js';
+import installRoutes from './routes/install.js';
+import { getEnvConfig } from './controllers/settings.js';
 import { apiKeyAuth, sessionOnly } from './middleware/apiKeyAuth.js';
 import sql from './lib/db.js';
 
@@ -122,6 +124,8 @@ app.use('/api/teams', sessionOnly, teamRoutes);
 app.use('/api/users', sessionOnly, userRoutes);
 app.use('/api/settings', sessionOnly, settingsRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
+app.use('/api/install', sessionOnly, installRoutes);
+app.get('/api/config/env', sessionOnly, getEnvConfig);
 
 // Health check
 app.get('/health', (req, res) => {
