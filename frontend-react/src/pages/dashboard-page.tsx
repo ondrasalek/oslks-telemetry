@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useWebsites, useTogglePinWebsite } from '@/hooks/use-websites';
 import { useTeamStats } from '@/hooks/use-analytics';
 import { useCurrentUser } from '@/hooks/use-auth';
-import { Badge } from '@/components/ui/badge';
+import { TrackerBadge } from '@/components/tracker-badge';
 import { Button } from '@/components/ui/button';
 import {
     Activity,
@@ -164,15 +164,7 @@ export function DashboardPage() {
                                         </div>
                                     </div>
                                     <div className='flex items-center gap-3'>
-                                        <Badge
-                                            variant={
-                                                site.status === 'active'
-                                                    ? 'default'
-                                                    : 'secondary'
-                                            }
-                                        >
-                                            {site.status ?? 'unknown'}
-                                        </Badge>
+                                        <TrackerBadge lastEventAt={site.last_event_at} />
                                         <ArrowUpRight className='h-4 w-4 text-muted-foreground' />
                                     </div>
                                 </Link>

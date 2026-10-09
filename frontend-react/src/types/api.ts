@@ -66,6 +66,8 @@ export interface Website {
     is_pinned: boolean;
     status: string | null;
     last_ping_at: string | null;
+    /** Timestamp of the newest tracker event, null if none was ever received. */
+    last_event_at: string | null;
     created_at: string;
     updated_at: string;
 }

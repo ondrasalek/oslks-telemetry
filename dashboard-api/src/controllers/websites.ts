@@ -11,7 +11,8 @@ export const listWebsites = async (req: Request, res: Response) => {
     try {
         console.log(`[Websites] Listing websites for user ${userId}`);
         const websites = await sql`
-            SELECT w.*, t.name as team_name
+            SELECT w.*, t.name as team_name,
+                   (SELECT MAX(e.created_at) FROM events e WHERE e.website_id = w.id) AS last_event_at
             FROM websites w
             JOIN team_members tm ON w.team_id = tm.team_id
             LEFT JOIN teams t ON w.team_id = t.id
@@ -109,7 +110,8 @@ export const getWebsite = async (req: Request, res: Response) => {
     try {
         console.log(`[Websites] Fetching website ${id} for user ${userId}`);
         const websites = await sql`
-            SELECT w.* 
+            SELECT w.*,
+                   (SELECT MAX(e.created_at) FROM events e WHERE e.website_id = w.id) AS last_event_at
             FROM websites w
             JOIN team_members tm ON w.team_id = tm.team_id
             WHERE w.id = ${id as string}::uuid AND tm.user_id = ${userId}::uuid
@@ -138,7 +140,8 @@ export const listAllWebsites = async (req: Request, res: Response) => {
         }
 
         const websites = await sql`
-            SELECT w.id, w.domain, w.name, w.status, w.share_id, w.is_pinned, w.created_at, t.name as team_name, w.team_id
+            SELECT w.id, w.domain, w.name, w.status, w.share_id, w.is_pinned, w.created_at, t.name as team_name, w.team_id,
+                   (SELECT MAX(e.created_at) FROM events e WHERE e.website_id = w.id) AS last_event_at
             FROM websites w
             LEFT JOIN teams t ON w.team_id = t.id
             ORDER BY w.created_at DESC
@@ -166,7 +169,8 @@ export const listTeamWebsites = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Forbidden' });
 
         const websites = await sql`
-            SELECT w.*
+            SELECT w.*,
+                   (SELECT MAX(e.created_at) FROM events e WHERE e.website_id = w.id) AS last_event_at
             FROM websites w
             WHERE w.team_id = ${team_id}::uuid
             ORDER BY w.is_pinned DESC, w.created_at DESC

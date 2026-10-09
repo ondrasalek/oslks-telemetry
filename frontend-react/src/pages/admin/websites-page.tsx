@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { TrackerBadge } from '@/components/tracker-badge';
 import { Button } from '@/components/ui/button';
 import { Globe, MoreVertical, Trash2, ExternalLink, Pin } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
@@ -38,6 +39,7 @@ interface AdminWebsite {
     team_id: string | null;
     team_name: string | null;
     status: string;
+    last_event_at: string | null;
     share_id: string | null;
     is_pinned: boolean;
     created_at: string;
@@ -163,15 +165,7 @@ export function AdminWebsitesPage() {
                                                 {site.team_name ?? '—'}
                                             </td>
                                             <td className='p-3'>
-                                                <Badge
-                                                    variant={
-                                                        site.status === 'active'
-                                                            ? 'default'
-                                                            : 'outline'
-                                                    }
-                                                >
-                                                    {site.status}
-                                                </Badge>
+                                                <TrackerBadge lastEventAt={site.last_event_at} />
                                                 {site.share_id && (
                                                     <Badge
                                                         variant='outline'

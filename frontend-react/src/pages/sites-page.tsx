@@ -25,6 +25,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { TrackerBadge } from '@/components/tracker-badge';
 import {
     Dialog,
     DialogContent,
@@ -227,15 +228,7 @@ export function SitesPage() {
                                                 {site.domain}
                                             </p>
                                             <div className='mt-2 flex items-center gap-2'>
-                                                <Badge
-                                                    variant={
-                                                        site.status === 'active'
-                                                            ? 'default'
-                                                            : 'secondary'
-                                                    }
-                                                >
-                                                    {site.status ?? 'unknown'}
-                                                </Badge>
+                                                <TrackerBadge lastEventAt={site.last_event_at} />
                                                 {site.share_id && (
                                                     <Badge
                                                         variant='outline'
