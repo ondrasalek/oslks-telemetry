@@ -15,6 +15,7 @@ import {
 export function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [remember, setRemember] = useState(true);
     const login = useLogin();
     const navigate = useNavigate();
     const { data: installStatus } = useInstallCheck();
@@ -28,7 +29,7 @@ export function LoginPage() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         login.mutate(
-            { email, password },
+            { email, password, remember },
             {
                 onSuccess: (data) => {
                     if (data.success) navigate('/dashboard');
@@ -89,6 +90,20 @@ export function LoginPage() {
                                 placeholder='••••••••'
                             />
                         </div>
+
+                        <label
+                            htmlFor='remember'
+                            className='flex items-center gap-2 text-sm text-foreground'
+                        >
+                            <input
+                                id='remember'
+                                type='checkbox'
+                                checked={remember}
+                                onChange={(e) => setRemember(e.target.checked)}
+                                className='h-4 w-4 rounded border-input'
+                            />
+                            Remember this device for 30 days
+                        </label>
 
                         {(login.data?.error || login.error) && (
                             <p className='text-sm text-destructive'>

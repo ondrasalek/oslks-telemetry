@@ -77,12 +77,15 @@ const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || 'local_dev_secret_key_change_me',
     resave: false,
     saveUninitialized: false,
+    // Refresh the cookie on every response so "remember this device" sessions
+    // slide forward while the dashboard is in use.
+    rolling: true,
     name: 'oslks_session',
     cookie: {
         secure: true, // Always true since we are behind Traefik HTTPS
         httpOnly: true,
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 24 * 60 * 60 * 1000, // default; login overrides per session (see auth controller)
     },
 });
 

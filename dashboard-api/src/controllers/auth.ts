@@ -2,8 +2,24 @@ import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import sql from '../lib/db.js';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const REMEMBER_MS = 30 * DAY_MS;
+
+/**
+ * "Remember this device": a persistent cookie that lives 30 days (sliding).
+ * Otherwise a browser-session cookie; with no cookie expiry the session store
+ * falls back to its default 1-day row TTL.
+ */
+const applySessionLifetime = (req: Request, remember: boolean) => {
+    if (remember) {
+        req.session.cookie.maxAge = REMEMBER_MS;
+    } else {
+        req.session.cookie.maxAge = undefined;
+    }
+};
+
 export const login = async (req: Request, res: Response) => {
-    const { email, password } = req.body;
+    const { email, password, remember } = req.body;
     console.log(`Login attempt for: ${email}`);
 
     try {
@@ -43,6 +59,7 @@ export const login = async (req: Request, res: Response) => {
 
         // Store user in session
         (req.session as any).userId = user.id;
+        applySessionLifetime(req, remember === true);
         console.log(
             `Successfully logged in user ${user.id}. Session ID: ${req.sessionID}`,
         );
@@ -111,6 +128,7 @@ export const register = async (req: Request, res: Response) => {
         }
 
         (req.session as any).userId = user.id;
+        applySessionLifetime(req, true);
         console.log(
             `Registered and logged in user ${user.id}. Created personal team ${teamId}`,
         );
