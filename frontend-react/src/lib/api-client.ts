@@ -25,6 +25,11 @@ apiClient.interceptors.response.use(
     },
     (error) => {
         if (axios.isAxiosError(error)) {
+            // Surface the server's own message instead of "Request failed with status code 4xx".
+            const serverMessage = error.response?.data?.error;
+            if (typeof serverMessage === 'string' && serverMessage) {
+                error.message = serverMessage;
+            }
             console.error(
                 `[API Error] ${error.config?.method?.toUpperCase()} ${error.config?.url}:`,
                 error.response?.status,

@@ -57,6 +57,25 @@ export function useUpdateUser() {
     });
 }
 
+export interface ResetPasswordResult {
+    emailed: boolean;
+    /** Only present when the email could not be sent; shown once to the admin. */
+    password?: string;
+    email_error?: string;
+}
+
+/** Issue a one-time password for a user (superuser only). */
+export function useResetPassword() {
+    return useMutation<ResetPasswordResult, Error, string>({
+        mutationFn: async (id) => {
+            const { data } = await apiClient.post<ResetPasswordResult>(
+                `/api/users/${id}/reset-password`,
+            );
+            return data;
+        },
+    });
+}
+
 export function useDeleteUser() {
     const queryClient = useQueryClient();
 

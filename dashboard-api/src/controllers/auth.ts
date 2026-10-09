@@ -24,7 +24,7 @@ export const login = async (req: Request, res: Response) => {
 
     try {
         const users = await sql`
-            SELECT id, email, name, password, role 
+            SELECT id, email, name, password, role, must_change_password 
             FROM users 
             WHERE email = ${email}
             LIMIT 1
@@ -61,6 +61,7 @@ export const login = async (req: Request, res: Response) => {
 
         // Store user in session
         (req.session as any).userId = user.id;
+        (req.session as any).mustChangePassword = user.must_change_password === true;
         applySessionLifetime(req, remember === true);
         console.log(
             `Successfully logged in user ${user.id}. Session ID: ${req.sessionID}`,
@@ -73,6 +74,7 @@ export const login = async (req: Request, res: Response) => {
             role: user.role as string,
             team_id: membership?.team_id || null,
             team_role: membership?.role || null,
+            must_change_password: user.must_change_password === true,
         };
 
         res.json({ success: true, user: sessionUser });
@@ -177,7 +179,7 @@ export const me = async (req: Request, res: Response) => {
 
     try {
         const users = await sql`
-            SELECT id, email, name, role 
+            SELECT id, email, name, role, must_change_password
             FROM users 
             WHERE id = ${userId}::uuid
             LIMIT 1
@@ -210,9 +212,44 @@ export const me = async (req: Request, res: Response) => {
             role: user.role,
             team_id: membership?.team_id || null,
             team_role: membership?.role || null,
+            must_change_password: user.must_change_password === true,
         });
     } catch (error) {
         console.error('Auth check (me) error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export const changePassword = async (req: Request, res: Response) => {
+    const userId = (req.session as any).userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { current_password, new_password } = req.body ?? {};
+    if (typeof current_password !== 'string' || typeof new_password !== 'string') {
+        return res.json({ success: false, error: 'Current and new password are required' });
+    }
+    if (new_password.length < 8) {
+        return res.json({ success: false, error: 'New password must be at least 8 characters' });
+    }
+    if (new_password === current_password) {
+        return res.json({ success: false, error: 'New password must differ from the current one' });
+    }
+
+    try {
+        const [user] = await sql`SELECT password FROM users WHERE id = ${userId}::uuid LIMIT 1`;
+        if (!user?.password || !(await bcrypt.compare(current_password, user.password))) {
+            return res.json({ success: false, error: 'Current password is incorrect' });
+        }
+
+        const hashed = await bcrypt.hash(new_password, 10);
+        await sql`
+            UPDATE users SET password = ${hashed}, must_change_password = FALSE, updated_at = NOW()
+            WHERE id = ${userId}::uuid
+        `;
+        (req.session as any).mustChangePassword = false;
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
 };

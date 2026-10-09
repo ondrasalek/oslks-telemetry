@@ -24,6 +24,8 @@ export interface SessionUser {
     role: 'superuser' | 'user';
     team_id: string | null;
     team_role: string | null;
+    /** Set after an admin-issued one-time password; the user must choose their own. */
+    must_change_password?: boolean;
 }
 
 /** Team organisation */

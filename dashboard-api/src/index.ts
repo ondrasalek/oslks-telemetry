@@ -99,6 +99,22 @@ app.use((req, res, next) =>
     req.apiKey ? next() : sessionMiddleware(req, res, next),
 );
 
+// A one-time password must be replaced before anything else is reachable.
+app.use((req, res, next) => {
+    if (
+        !req.apiKey &&
+        (req.session as any)?.mustChangePassword &&
+        !req.path.startsWith('/api/auth/') &&
+        req.path !== '/health'
+    ) {
+        return res.status(403).json({
+            error: 'Password change required',
+            code: 'PASSWORD_CHANGE_REQUIRED',
+        });
+    }
+    next();
+});
+
 // Logging middleware
 app.use((req, res, next) => {
     const auth = req.apiKey

@@ -3,6 +3,8 @@ import {
     useUpdateUser,
     useDeleteUser,
     useCreateUser,
+    useResetPassword,
+    type ResetPasswordResult,
 } from '@/hooks/use-users';
 import {
     Card,
@@ -14,7 +16,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, User as UserIcon, Edit, MoreVertical } from 'lucide-react';
+import {
+    Trash2,
+    User as UserIcon,
+    Edit,
+    MoreVertical,
+    KeyRound,
+} from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useState } from 'react';
 import {
@@ -45,6 +53,12 @@ import type { AuthUser } from '@/types/api';
 export function AdminUsersPage() {
     const { data: users, isLoading } = useUsers();
     const deleteUser = useDeleteUser();
+    const resetPassword = useResetPassword();
+    const [resetResult, setResetResult] = useState<{
+        email: string;
+        result: ResetPasswordResult;
+    } | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
     const [editUser, setEditUser] = useState<AuthUser | null>(null);
     const [showCreateUser, setShowCreateUser] = useState(false);
 
@@ -63,6 +77,12 @@ export function AdminUsersPage() {
                     Create User
                 </Button>
             </div>
+
+            {actionError && (
+                <p className='rounded-md bg-destructive/10 p-3 text-sm text-destructive'>
+                    {actionError}
+                </p>
+            )}
 
             <Card>
                 <CardHeader>
@@ -180,11 +200,62 @@ export function AdminUsersPage() {
                                                             onClick={() => {
                                                                 if (
                                                                     confirm(
+                                                                        `Issue a one-time password for ${user.email}? Their current password and sessions stop working.`,
+                                                                    )
+                                                                ) {
+                                                                    setActionError(
+                                                                        null,
+                                                                    );
+                                                                    resetPassword.mutate(
+                                                                        user.id,
+                                                                        {
+                                                                            onSuccess:
+                                                                                (
+                                                                                    result,
+                                                                                ) =>
+                                                                                    setResetResult(
+                                                                                        {
+                                                                                            email: user.email,
+                                                                                            result,
+                                                                                        },
+                                                                                    ),
+                                                                            onError:
+                                                                                (
+                                                                                    e,
+                                                                                ) =>
+                                                                                    setActionError(
+                                                                                        e.message,
+                                                                                    ),
+                                                                        },
+                                                                    );
+                                                                }
+                                                            }}
+                                                            className='gap-2'
+                                                        >
+                                                            <KeyRound className='h-4 w-4' />
+                                                            Reset password
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => {
+                                                                if (
+                                                                    confirm(
                                                                         `Delete user ${user.email}?`,
                                                                     )
                                                                 ) {
+                                                                    setActionError(
+                                                                        null,
+                                                                    );
                                                                     deleteUser.mutate(
                                                                         user.id,
+                                                                        {
+                                                                            onError:
+                                                                                (
+                                                                                    e,
+                                                                                ) =>
+                                                                                    setActionError(
+                                                                                        e.message,
+                                                                                    ),
+                                                                        },
                                                                     );
                                                                 }
                                                             }}
@@ -218,6 +289,14 @@ export function AdminUsersPage() {
 
             {showCreateUser && (
                 <CreateUserModal onClose={() => setShowCreateUser(false)} />
+            )}
+
+            {resetResult && (
+                <ResetPasswordResultModal
+                    email={resetResult.email}
+                    result={resetResult.result}
+                    onClose={() => setResetResult(null)}
+                />
             )}
         </div>
     );
@@ -417,6 +496,46 @@ function EditUserModal({
                         </Button>
                     </DialogFooter>
                 </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function ResetPasswordResultModal({
+    email,
+    result,
+    onClose,
+}: {
+    email: string;
+    result: ResetPasswordResult;
+    onClose: () => void;
+}) {
+    return (
+        <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>One-time password issued</DialogTitle>
+                    <DialogDescription>
+                        {result.emailed
+                            ? `A one-time password was emailed to ${email}. They must choose a new password when they sign in.`
+                            : `Share this one-time password with ${email} securely. It is shown only once, and they must choose a new password when they sign in.`}
+                    </DialogDescription>
+                </DialogHeader>
+                {!result.emailed && result.password && (
+                    <div className='space-y-2'>
+                        <code className='block select-all rounded-md bg-muted p-3 text-center font-mono text-lg tracking-wider'>
+                            {result.password}
+                        </code>
+                        {result.email_error && (
+                            <p className='text-sm text-destructive'>
+                                Email could not be sent: {result.email_error}
+                            </p>
+                        )}
+                    </div>
+                )}
+                <DialogFooter>
+                    <Button onClick={onClose}>Done</Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

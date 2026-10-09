@@ -26,6 +26,7 @@ import { PrivacyPage } from '@/pages/privacy-page';
 import { CookiesPage } from '@/pages/cookies-page';
 import { PublicSharePage } from '@/pages/public-share-page';
 import { InvitePage } from '@/pages/invite-page';
+import { ChangePasswordPage } from '@/pages/change-password-page';
 import { RegisterPage } from '@/pages/register-page';
 
 // ── Query Client ─────────────────────────────────────────
@@ -58,6 +59,10 @@ export default function App() {
                         element={<PublicSharePage />}
                     />
                     <Route path='/invite/accept' element={<InvitePage />} />
+                    <Route
+                        path='/change-password'
+                        element={<ChangePasswordPage />}
+                    />
 
                     {/* Protected dashboard routes */}
                     <Route element={<ProtectedRoute />}>

@@ -80,6 +80,29 @@ export function useLogout() {
     });
 }
 
+/** Change the signed-in user's password (also clears a forced reset). */
+export function useChangePassword() {
+    const queryClient = useQueryClient();
+
+    return useMutation<
+        void,
+        Error,
+        { current_password: string; new_password: string }
+    >({
+        mutationFn: async (payload) => {
+            const { data } = await apiClient.post<{
+                success: boolean;
+                error?: string;
+            }>('/api/auth/change-password', payload);
+            if (!data.success)
+                throw new Error(data.error || 'Failed to change password');
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: authKeys.currentUser });
+        },
+    });
+}
+
 /** Registration mutation — POST /api/auth/register */
 export function useRegister() {
     const queryClient = useQueryClient();

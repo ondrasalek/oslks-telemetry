@@ -32,7 +32,12 @@ export function LoginPage() {
             { email, password, remember },
             {
                 onSuccess: (data) => {
-                    if (data.success) navigate('/dashboard');
+                    if (data.success)
+                        navigate(
+                            data.user?.must_change_password
+                                ? '/change-password'
+                                : '/dashboard',
+                        );
                 },
             },
         );
