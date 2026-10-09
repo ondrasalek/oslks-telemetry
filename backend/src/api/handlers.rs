@@ -219,12 +219,20 @@ pub async fn collect(
         .map(|reader| reader.lookup(&client_ip))
         .unwrap_or((None, None));
 
+    // Drop referrers that are the tracked site itself (internal navigation)
+    let site_domain = state.domain_cache.get(&payload.website_id).await;
+    let referrer = payload.referrer.filter(|r| {
+        !site_domain
+            .as_deref()
+            .is_some_and(|d| crate::utils::url::is_self_referrer(d, r))
+    });
+
     // Create event
     let event = CreateEvent {
         website_id: payload.website_id,
         session_id,
-        url: payload.url,
-        referrer: payload.referrer,
+        url: crate::utils::url::normalize_page_url(&payload.url),
+        referrer,
         event_type: payload.event_type,
         event_name: payload.event_name,
         event_data: payload.event_data,

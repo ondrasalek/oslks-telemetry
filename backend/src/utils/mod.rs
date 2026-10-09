@@ -5,6 +5,7 @@
 pub mod bot_detection;
 pub mod session;
 pub mod geoip;
+pub mod url;
 
 pub use bot_detection::*;
 pub use session::*;
