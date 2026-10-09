@@ -44,6 +44,8 @@ router.get(
 );
 
 // Shared analytics
+router.get('/shared/:share_id/realtime', analyticsController.getSharedRealtime);
+router.get('/shared/:share_id/countries', analyticsController.getSharedCountryStats);
 router.get('/shared/:share_id/stats', analyticsController.getSharedStats);
 router.get('/shared/:share_id/metrics', analyticsController.getSharedMetrics);
 router.get('/shared/:share_id/chart', analyticsController.getSharedChartData);

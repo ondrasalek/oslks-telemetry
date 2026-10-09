@@ -346,10 +346,18 @@ export const updateWebsiteShare = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Invalid share_id' });
         }
 
+        if (
+            share_config !== undefined &&
+            share_config !== null &&
+            (typeof share_config !== 'object' || Array.isArray(share_config))
+        ) {
+            return res.status(400).json({ error: 'Invalid share_config' });
+        }
+
         await sql`
             UPDATE websites SET
                 share_id = ${share_id || null},
-                share_config = COALESCE(${share_config ? JSON.stringify(share_config) : null}::jsonb, share_config),
+                share_config = COALESCE(${share_config ? sql.json(share_config) : null}::jsonb, share_config),
                 updated_at = NOW()
             WHERE id = ${ctx.id}::uuid
         `;

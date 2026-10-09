@@ -203,6 +203,38 @@ export function usePublicChartData(
     });
 }
 
+/** Public distinct visitors per country by share ID. */
+export function usePublicCountryStats(shareId: string, range: DateRange) {
+    return useQuery<CountryStat[]>({
+        queryKey: ['analytics', 'public', 'countries', shareId, range] as const,
+        queryFn: async () => {
+            const params = new URLSearchParams();
+            if (range.from) params.append('start_at', range.from);
+            if (range.to) params.append('end_at', range.to);
+            const { data } = await apiClient.get<CountryStat[]>(
+                `/api/analytics/shared/${shareId}/countries?${params.toString()}`,
+            );
+            return data;
+        },
+        enabled: !!shareId,
+    });
+}
+
+/** Public last-30-minutes snapshot by share ID. Polls every 10s. */
+export function usePublicRealtime(shareId: string) {
+    return useQuery<RealtimeData>({
+        queryKey: ['analytics', 'public', 'realtime', shareId] as const,
+        queryFn: async () => {
+            const { data } = await apiClient.get<RealtimeData>(
+                `/api/analytics/shared/${shareId}/realtime`,
+            );
+            return data;
+        },
+        enabled: !!shareId,
+        refetchInterval: 10_000,
+    });
+}
+
 /** Fetch public metric breakdown by share ID. */
 export function usePublicMetrics(
     shareId: string,

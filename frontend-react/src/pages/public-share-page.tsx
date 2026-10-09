@@ -7,6 +7,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AnalyticsChart } from '@/components/analytics/analytics-chart';
 import { PublicMetricsCard } from '@/components/analytics/public-metrics-card';
 import { DateFilter } from '@/components/analytics/date-filter';
+import { PublicCountryMapCard } from '@/components/analytics/country-map-card';
+import { PublicRealtimePanel } from '@/components/analytics/realtime-panel';
+import { cn } from '@/lib/utils';
 import { getDateRangeFromFilter } from '@/lib/dates';
 import { Globe } from 'lucide-react';
 
@@ -19,6 +22,7 @@ export function PublicSharePage() {
     } = usePublicWebsite(share_id ?? '');
 
     const [dateFilter, setDateFilter] = useState<string>('7d');
+    const [tab, setTab] = useState<'overview' | 'realtime'>('overview');
 
     const { from, to } = useMemo(() => {
         return getDateRangeFromFilter(dateFilter);
@@ -120,140 +124,194 @@ export function PublicSharePage() {
                             </p>
                         </div>
                     </div>
-                    <div>
-                        <DateFilter
-                            value={dateFilter}
-                            onValueChange={setDateFilter}
-                        />
-                    </div>
+                    {tab === 'overview' && (
+                        <div>
+                            <DateFilter
+                                value={dateFilter}
+                                onValueChange={setDateFilter}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className='max-w-6xl mx-auto p-6 space-y-6 animate-in fade-in duration-500'>
-                {/* Stats Grid */}
                 {isFeatureEnabled('stats') && (
-                    <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
-                        <Card>
-                            <CardHeader className='pb-2'>
-                                <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                    Pageviews
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {statsLoading ? (
-                                    <Skeleton className='h-8 w-24' />
-                                ) : (
-                                    <div className='text-2xl font-bold'>
-                                        {stats?.pageviews ?? 0}
-                                    </div>
+                    <div className='flex gap-4 border-b'>
+                        {(['overview', 'realtime'] as const).map((t) => (
+                            <button
+                                key={t}
+                                onClick={() => setTab(t)}
+                                className={cn(
+                                    'pb-2 -mb-px border-b-2 font-medium capitalize transition-colors hover:text-primary',
+                                    tab === t
+                                        ? 'border-primary text-primary'
+                                        : 'text-muted-foreground border-transparent',
                                 )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className='pb-2'>
-                                <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                    Visitors
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {statsLoading ? (
-                                    <Skeleton className='h-8 w-24' />
-                                ) : (
-                                    <div className='text-2xl font-bold'>
-                                        {stats?.visitors ?? 0}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className='pb-2'>
-                                <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                    Bounce Rate
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {statsLoading ? (
-                                    <Skeleton className='h-8 w-24' />
-                                ) : (
-                                    <div className='text-2xl font-bold'>
-                                        {(stats?.bounce_rate ?? 0).toFixed(1)}%
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className='pb-2'>
-                                <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                    Avg. Duration
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {statsLoading ? (
-                                    <Skeleton className='h-8 w-24' />
-                                ) : (
-                                    <div className='text-2xl font-bold'>
-                                        {stats?.avg_duration ?? 0}s
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                            >
+                                {t}
+                            </button>
+                        ))}
                     </div>
                 )}
 
-                {/* Main Activity Chart */}
-                {isFeatureEnabled('graph') && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Activity</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <AnalyticsChart
-                                data={chartData ?? []}
-                                isLoading={chartLoading}
-                            />
-                        </CardContent>
-                    </Card>
-                )}
+                {tab === 'realtime' && isFeatureEnabled('stats') ? (
+                    <PublicRealtimePanel
+                        shareId={share_id!}
+                        showPages={isFeatureEnabled('pages')}
+                        showCountries={isFeatureEnabled('geography')}
+                    />
+                ) : (
+                    <>
+                        {/* Stats Grid */}
+                        {isFeatureEnabled('stats') && (
+                            <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
+                                <Card>
+                                    <CardHeader className='pb-2'>
+                                        <CardTitle className='text-sm font-medium text-muted-foreground'>
+                                            Pageviews
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {statsLoading ? (
+                                            <Skeleton className='h-8 w-24' />
+                                        ) : (
+                                            <div className='text-2xl font-bold'>
+                                                {stats?.pageviews ?? 0}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className='pb-2'>
+                                        <CardTitle className='text-sm font-medium text-muted-foreground'>
+                                            Visitors
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {statsLoading ? (
+                                            <Skeleton className='h-8 w-24' />
+                                        ) : (
+                                            <div className='text-2xl font-bold'>
+                                                {stats?.visitors ?? 0}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className='pb-2'>
+                                        <CardTitle className='text-sm font-medium text-muted-foreground'>
+                                            Bounce Rate
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {statsLoading ? (
+                                            <Skeleton className='h-8 w-24' />
+                                        ) : (
+                                            <div className='text-2xl font-bold'>
+                                                {(
+                                                    stats?.bounce_rate ?? 0
+                                                ).toFixed(1)}
+                                                %
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className='pb-2'>
+                                        <CardTitle className='text-sm font-medium text-muted-foreground'>
+                                            Avg. Duration
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {statsLoading ? (
+                                            <Skeleton className='h-8 w-24' />
+                                        ) : (
+                                            <div className='text-2xl font-bold'>
+                                                {stats?.avg_duration ?? 0}s
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        )}
 
-                {/* Detailed Metrics Grid */}
-                <div className='grid gap-6 md:grid-cols-2'>
-                    {isFeatureEnabled('pages') && (
-                        <PublicMetricsCard
-                            title='Pages'
-                            shareId={share_id!}
-                            range={{ from, to }}
-                            tabs={[{ label: 'Path', value: 'url' }]}
-                        />
-                    )}
-                    {isFeatureEnabled('sources') && (
-                        <PublicMetricsCard
-                            title='Sources'
-                            shareId={share_id!}
-                            range={{ from, to }}
-                            tabs={[{ label: 'Referrers', value: 'referrer' }]}
-                        />
-                    )}
-                    {isFeatureEnabled('environment') && (
-                        <PublicMetricsCard
-                            title='Environment'
-                            shareId={share_id!}
-                            range={{ from, to }}
-                            tabs={[
-                                { label: 'Browsers', value: 'browser' },
-                                { label: 'OS', value: 'os' },
-                                { label: 'Devices', value: 'device_type' },
-                            ]}
-                        />
-                    )}
-                    {isFeatureEnabled('geography') && (
-                        <PublicMetricsCard
-                            title='Geography'
-                            shareId={share_id!}
-                            range={{ from, to }}
-                            tabs={[{ label: 'Countries', value: 'country' }]}
-                        />
-                    )}
-                </div>
+                        {/* Main Activity Chart */}
+                        {isFeatureEnabled('graph') && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Activity</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <AnalyticsChart
+                                        data={chartData ?? []}
+                                        isLoading={chartLoading}
+                                    />
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {isFeatureEnabled('geography') && (
+                            <PublicCountryMapCard
+                                shareId={share_id!}
+                                range={{ from, to }}
+                            />
+                        )}
+
+                        {/* Detailed Metrics Grid */}
+                        <div className='grid gap-6 md:grid-cols-2'>
+                            {isFeatureEnabled('pages') && (
+                                <PublicMetricsCard
+                                    title='Pages'
+                                    shareId={share_id!}
+                                    range={{ from, to }}
+                                    tabs={[{ label: 'Path', value: 'url' }]}
+                                />
+                            )}
+                            {isFeatureEnabled('sources') && (
+                                <PublicMetricsCard
+                                    title='Sources'
+                                    shareId={share_id!}
+                                    range={{ from, to }}
+                                    tabs={[
+                                        {
+                                            label: 'Referrers',
+                                            value: 'referrer',
+                                        },
+                                    ]}
+                                />
+                            )}
+                            {isFeatureEnabled('environment') && (
+                                <PublicMetricsCard
+                                    title='Environment'
+                                    shareId={share_id!}
+                                    range={{ from, to }}
+                                    tabs={[
+                                        { label: 'Browsers', value: 'browser' },
+                                        { label: 'OS', value: 'os' },
+                                        {
+                                            label: 'Devices',
+                                            value: 'device_type',
+                                        },
+                                    ]}
+                                />
+                            )}
+                            {isFeatureEnabled('geography') && (
+                                <PublicMetricsCard
+                                    title='Geography'
+                                    shareId={share_id!}
+                                    range={{ from, to }}
+                                    tabs={[
+                                        {
+                                            label: 'Countries',
+                                            value: 'country',
+                                        },
+                                    ]}
+                                />
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

@@ -1,21 +1,19 @@
 import { lazy, Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCountryStats } from '@/hooks/use-analytics';
-import type { DateRange } from '@/types/api';
+import { useCountryStats, usePublicCountryStats } from '@/hooks/use-analytics';
+import type { CountryStat, DateRange } from '@/types/api';
 
 // The map pulls in d3-geo and the country shapes; only load them when shown.
 const WorldMap = lazy(() => import('./world-map'));
 
-export function CountryMapCard({
-    websiteId,
-    range,
+function CountryMapView({
+    data,
+    isLoading,
 }: {
-    websiteId: string;
-    range: DateRange;
+    data: CountryStat[] | undefined;
+    isLoading: boolean;
 }) {
-    const { data, isLoading } = useCountryStats(websiteId, range);
-
     return (
         <Card>
             <CardHeader className='pb-2'>
@@ -41,4 +39,26 @@ export function CountryMapCard({
             </CardContent>
         </Card>
     );
+}
+
+export function CountryMapCard({
+    websiteId,
+    range,
+}: {
+    websiteId: string;
+    range: DateRange;
+}) {
+    const { data, isLoading } = useCountryStats(websiteId, range);
+    return <CountryMapView data={data} isLoading={isLoading} />;
+}
+
+export function PublicCountryMapCard({
+    shareId,
+    range,
+}: {
+    shareId: string;
+    range: DateRange;
+}) {
+    const { data, isLoading } = usePublicCountryStats(shareId, range);
+    return <CountryMapView data={data} isLoading={isLoading} />;
 }

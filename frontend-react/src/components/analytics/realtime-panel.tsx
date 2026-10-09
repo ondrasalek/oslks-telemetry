@@ -10,7 +10,8 @@ import {
 import { format, parseISO } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useRealtime } from '@/hooks/use-analytics';
+import { usePublicRealtime, useRealtime } from '@/hooks/use-analytics';
+import type { RealtimeData } from '@/types/api';
 import { countryFlag, countryName } from '@/lib/countries';
 
 const WorldMap = lazy(() => import('./world-map'));
@@ -95,10 +96,18 @@ function Ranked({
     );
 }
 
-/** Live view of the last 30 minutes; refreshes every 10 seconds. */
-export function RealtimePanel({ websiteId }: { websiteId: string }) {
-    const { data, isLoading } = useRealtime(websiteId);
-
+function RealtimeView({
+    data,
+    isLoading,
+    showPages = true,
+    showCountries = true,
+}: {
+    data: RealtimeData | undefined;
+    isLoading: boolean;
+    /** Public pages may hide sections the owner chose not to share. */
+    showPages?: boolean;
+    showCountries?: boolean;
+}) {
     return (
         <div className='space-y-6 animate-in fade-in duration-500'>
             <div className='grid gap-4 sm:grid-cols-3'>
@@ -172,35 +181,74 @@ export function RealtimePanel({ websiteId }: { websiteId: string }) {
                 </CardContent>
             </Card>
 
-            <div className='grid gap-6 md:grid-cols-2'>
-                <Ranked
-                    title='Top pages'
-                    rows={data?.pages ?? []}
-                    render={(v) => v}
-                    loading={isLoading}
-                />
-                <Ranked
-                    title='Top countries'
-                    rows={(data?.countries ?? []).slice(0, 8)}
-                    render={(v) => `${countryFlag(v)} ${countryName(v)}`.trim()}
-                    loading={isLoading}
-                />
-            </div>
+            {(showPages || showCountries) && (
+                <div className='grid gap-6 md:grid-cols-2'>
+                    {showPages && (
+                        <Ranked
+                            title='Top pages'
+                            rows={data?.pages ?? []}
+                            render={(v) => v}
+                            loading={isLoading}
+                        />
+                    )}
+                    {showCountries && (
+                        <Ranked
+                            title='Top countries'
+                            rows={(data?.countries ?? []).slice(0, 8)}
+                            render={(v) =>
+                                `${countryFlag(v)} ${countryName(v)}`.trim()
+                            }
+                            loading={isLoading}
+                        />
+                    )}
+                </div>
+            )}
 
-            <Card>
-                <CardHeader className='pb-2'>
-                    <CardTitle className='text-base font-semibold'>
-                        Where they are right now
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Suspense
-                        fallback={<Skeleton className='aspect-[2/1] w-full' />}
-                    >
-                        <WorldMap data={data?.countries ?? []} />
-                    </Suspense>
-                </CardContent>
-            </Card>
+            {showCountries && (
+                <Card>
+                    <CardHeader className='pb-2'>
+                        <CardTitle className='text-base font-semibold'>
+                            Where they are right now
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <Suspense
+                            fallback={
+                                <Skeleton className='aspect-[2/1] w-full' />
+                            }
+                        >
+                            <WorldMap data={data?.countries ?? []} />
+                        </Suspense>
+                    </CardContent>
+                </Card>
+            )}
         </div>
+    );
+}
+
+/** Live view of the last 30 minutes; refreshes every 10 seconds. */
+export function RealtimePanel({ websiteId }: { websiteId: string }) {
+    const { data, isLoading } = useRealtime(websiteId);
+    return <RealtimeView data={data} isLoading={isLoading} />;
+}
+
+/** Same view for a public share link; honours what the owner chose to share. */
+export function PublicRealtimePanel({
+    shareId,
+    showPages,
+    showCountries,
+}: {
+    shareId: string;
+    showPages: boolean;
+    showCountries: boolean;
+}) {
+    const { data, isLoading } = usePublicRealtime(shareId);
+    return (
+        <RealtimeView
+            data={data}
+            isLoading={isLoading}
+            showPages={showPages}
+            showCountries={showCountries}
+        />
     );
 }
