@@ -103,6 +103,15 @@ export interface CountryStat {
     views: number;
 }
 
+/** Visitors for one city (coordinates are the city centre, not the visitor). */
+export interface CityStat {
+    city: string | null;
+    country: string | null;
+    lat: number;
+    lng: number;
+    visitors: number;
+}
+
 /** Last-30-minutes snapshot for the realtime view. */
 export interface RealtimeData {
     window_minutes: number;
@@ -113,6 +122,7 @@ export interface RealtimeData {
     per_minute: ChartDataPoint[];
     pages: { value: string; visitors: number }[];
     countries: { value: string; visitors: number }[];
+    cities: CityStat[];
 }
 
 /** Metric type enumeration */

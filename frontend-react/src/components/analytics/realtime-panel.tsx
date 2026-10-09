@@ -217,7 +217,10 @@ function RealtimeView({
                                 <Skeleton className='aspect-[2/1] w-full' />
                             }
                         >
-                            <WorldMap data={data?.countries ?? []} />
+                            <WorldMap
+                                data={data?.countries ?? []}
+                                cities={data?.cities ?? []}
+                            />
                         </Suspense>
                     </CardContent>
                 </Card>

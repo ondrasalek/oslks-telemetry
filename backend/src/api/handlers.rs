@@ -213,11 +213,11 @@ pub async fn collect(
     let os = detect_os(&user_agent).to_string();
 
     // Detect country and city using GeoIP
-    let (country, city) = state
+    let geo = state
         .geoip_reader
         .as_ref()
         .map(|reader| reader.lookup(&client_ip))
-        .unwrap_or((None, None));
+        .unwrap_or_default();
 
     // Drop referrers that are the tracked site itself (internal navigation)
     let site_domain = state.domain_cache.get(&payload.website_id).await;
@@ -237,8 +237,10 @@ pub async fn collect(
         event_name: payload.event_name,
         event_data: payload.event_data,
         user_agent: Some(user_agent),
-        country,
-        city,
+        country: geo.country,
+        city: geo.city,
+        latitude: geo.latitude,
+        longitude: geo.longitude,
         device_type: Some(device_type),
         browser: Some(browser),
         os: Some(os),

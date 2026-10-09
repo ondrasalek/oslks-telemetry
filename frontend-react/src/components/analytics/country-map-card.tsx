@@ -1,17 +1,24 @@
 import { lazy, Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCountryStats, usePublicCountryStats } from '@/hooks/use-analytics';
-import type { CountryStat, DateRange } from '@/types/api';
+import {
+    useCityStats,
+    useCountryStats,
+    usePublicCityStats,
+    usePublicCountryStats,
+} from '@/hooks/use-analytics';
+import type { CityStat, CountryStat, DateRange } from '@/types/api';
 
 // The map pulls in d3-geo and the country shapes; only load them when shown.
 const WorldMap = lazy(() => import('./world-map'));
 
 function CountryMapView({
     data,
+    cities,
     isLoading,
 }: {
     data: CountryStat[] | undefined;
+    cities: CityStat[] | undefined;
     isLoading: boolean;
 }) {
     return (
@@ -33,6 +40,7 @@ function CountryMapView({
                                 value: c.value,
                                 visitors: c.visitors,
                             }))}
+                            cities={cities ?? []}
                         />
                     </Suspense>
                 )}
@@ -49,7 +57,8 @@ export function CountryMapCard({
     range: DateRange;
 }) {
     const { data, isLoading } = useCountryStats(websiteId, range);
-    return <CountryMapView data={data} isLoading={isLoading} />;
+    const { data: cities } = useCityStats(websiteId, range);
+    return <CountryMapView data={data} cities={cities} isLoading={isLoading} />;
 }
 
 export function PublicCountryMapCard({
@@ -60,5 +69,6 @@ export function PublicCountryMapCard({
     range: DateRange;
 }) {
     const { data, isLoading } = usePublicCountryStats(shareId, range);
-    return <CountryMapView data={data} isLoading={isLoading} />;
+    const { data: cities } = usePublicCityStats(shareId, range);
+    return <CountryMapView data={data} cities={cities} isLoading={isLoading} />;
 }

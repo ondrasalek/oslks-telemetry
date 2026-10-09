@@ -39,6 +39,8 @@ pub struct Event {
     pub user_agent: Option<String>,
     pub country: Option<String>,
     pub city: Option<String>,
+    pub latitude: Option<f32>,
+    pub longitude: Option<f32>,
     pub device_type: Option<String>,
     pub browser: Option<String>,
     pub os: Option<String>,
@@ -58,6 +60,8 @@ pub struct CreateEvent {
     pub user_agent: Option<String>,
     pub country: Option<String>,
     pub city: Option<String>,
+    pub latitude: Option<f32>,
+    pub longitude: Option<f32>,
     pub device_type: Option<String>,
     pub browser: Option<String>,
     pub os: Option<String>,
@@ -71,8 +75,8 @@ impl CreateEvent {
             INSERT INTO events (
                 website_id, session_id, url, referrer, event_type,
                 event_name, event_data, user_agent, country, city,
-                device_type, browser, os
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                latitude, longitude, device_type, browser, os
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             "#,
         )
         .bind(&self.website_id)
@@ -85,6 +89,8 @@ impl CreateEvent {
         .bind(&self.user_agent)
         .bind(&self.country)
         .bind(&self.city)
+        .bind(self.latitude)
+        .bind(self.longitude)
         .bind(&self.device_type)
         .bind(&self.browser)
         .bind(&self.os)

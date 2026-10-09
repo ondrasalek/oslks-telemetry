@@ -208,6 +208,26 @@ const queryCountries = (websiteId: string, startAt?: string, endAt?: string) => 
     ORDER BY visitors DESC
 `;
 
+/**
+ * Visitors per city, for the map dots. Only events recorded after coordinates were
+ * introduced have them, so older traffic still shows at country level only.
+ */
+const queryCities = (websiteId: string, startAt?: string, endAt?: string) => sql`
+    SELECT city,
+           country,
+           round(latitude::numeric, 2)::float8 AS lat,
+           round(longitude::numeric, 2)::float8 AS lng,
+           COUNT(DISTINCT session_id)::int AS visitors
+    FROM events
+    WHERE website_id = ${websiteId}::uuid
+      AND latitude IS NOT NULL AND longitude IS NOT NULL
+      AND (${startAt || null}::timestamptz IS NULL OR created_at >= ${startAt || null}::timestamptz)
+      AND (${endAt || null}::timestamptz IS NULL OR created_at <= ${endAt || null}::timestamptz)
+    GROUP BY city, country, round(latitude::numeric, 2), round(longitude::numeric, 2)
+    ORDER BY visitors DESC
+    LIMIT 200
+`;
+
 const REALTIME_MINUTES = 30;
 
 /** Last-30-minutes snapshot: totals, a per-minute series, top pages and countries. */
@@ -250,7 +270,11 @@ const queryRealtime = async (websiteId: string) => {
         LIMIT ${limit}
     `;
     // Countries are unbounded (the map shades all of them); the UI trims its list.
-    const [pages, countries] = await Promise.all([top('url', 8), top('country', 300)]);
+    const [pages, countries, cities] = await Promise.all([
+        top('url', 8),
+        top('country', 300),
+        queryCities(websiteId, new Date(Date.now() - REALTIME_MINUTES * 60_000).toISOString()),
+    ]);
 
     return {
         window_minutes: REALTIME_MINUTES,
@@ -260,6 +284,7 @@ const queryRealtime = async (websiteId: string) => {
         per_minute,
         pages,
         countries,
+        cities,
     };
 };
 
@@ -273,6 +298,19 @@ export const getCountryStats = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Country stats error:', error);
         res.status(500).json({ error: 'Failed to fetch country stats' });
+    }
+};
+
+export const getCityStats = async (req: Request, res: Response) => {
+    const { website_id } = req.params as { website_id: string };
+    const { start_at, end_at } = req.query;
+
+    try {
+        if (!(await requireWebsiteAccess(req, res, website_id))) return;
+        res.json(await queryCities(website_id, start_at as string, end_at as string));
+    } catch (error) {
+        console.error('City stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch city stats' });
     }
 };
 
@@ -613,9 +651,29 @@ export const getSharedRealtime = async (req: Request, res: Response) => {
             countries: isSharedFeatureEnabled(website.share_config, 'geography')
                 ? data.countries
                 : [],
+            cities: isSharedFeatureEnabled(website.share_config, 'geography')
+                ? data.cities
+                : [],
         });
     } catch (error) {
         console.error('Shared realtime error:', error);
         res.status(500).json({ error: 'Failed to fetch realtime data' });
+    }
+};
+
+export const getSharedCityStats = async (req: Request, res: Response) => {
+    const { share_id } = req.params as { share_id: string };
+    const { start_at, end_at } = req.query;
+
+    try {
+        const website = await getSharedWebsiteInfo(share_id);
+        if (!website) return res.status(404).json({ error: 'Website not found' });
+        if (!isSharedFeatureEnabled(website.share_config, 'geography')) {
+            return res.status(403).json({ error: 'Feature disabled' });
+        }
+        res.json(await queryCities(website.id, start_at as string, end_at as string));
+    } catch (error) {
+        console.error('Shared city stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch city stats' });
     }
 };

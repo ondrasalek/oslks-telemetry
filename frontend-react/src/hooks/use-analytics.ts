@@ -7,6 +7,7 @@ import type {
     MetricType,
     DateRange,
     CountryStat,
+    CityStat,
     RealtimeData,
 } from '@/types/api';
 
@@ -130,6 +131,23 @@ export function useCountryStats(websiteId: string, range: DateRange) {
     });
 }
 
+/** Visitors per city, for the map dots. */
+export function useCityStats(websiteId: string, range: DateRange) {
+    return useQuery<CityStat[]>({
+        queryKey: ['analytics', 'cities', websiteId, range] as const,
+        queryFn: async () => {
+            const params = new URLSearchParams();
+            if (range.from) params.append('start_at', range.from);
+            if (range.to) params.append('end_at', range.to);
+            const { data } = await apiClient.get<CityStat[]>(
+                `/api/analytics/${websiteId}/cities?${params.toString()}`,
+            );
+            return data;
+        },
+        enabled: !!websiteId,
+    });
+}
+
 /** Last-30-minutes snapshot. Polls every 10s while the tab is visible. */
 export function useRealtime(websiteId: string, enabled = true) {
     return useQuery<RealtimeData>({
@@ -213,6 +231,23 @@ export function usePublicCountryStats(shareId: string, range: DateRange) {
             if (range.to) params.append('end_at', range.to);
             const { data } = await apiClient.get<CountryStat[]>(
                 `/api/analytics/shared/${shareId}/countries?${params.toString()}`,
+            );
+            return data;
+        },
+        enabled: !!shareId,
+    });
+}
+
+/** Public visitors per city by share ID. */
+export function usePublicCityStats(shareId: string, range: DateRange) {
+    return useQuery<CityStat[]>({
+        queryKey: ['analytics', 'public', 'cities', shareId, range] as const,
+        queryFn: async () => {
+            const params = new URLSearchParams();
+            if (range.from) params.append('start_at', range.from);
+            if (range.to) params.append('end_at', range.to);
+            const { data } = await apiClient.get<CityStat[]>(
+                `/api/analytics/shared/${shareId}/cities?${params.toString()}`,
             );
             return data;
         },

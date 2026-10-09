@@ -4,11 +4,15 @@ import { feature } from 'topojson-client';
 import { alpha2ToNumeric } from 'i18n-iso-countries';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { Topology, GeometryCollection } from 'topojson-specification';
+import type { CityStat } from '@/types/api';
+import { countryName } from '@/lib/countries';
 import worldUrl from 'world-atlas/countries-110m.json?url';
 
 interface WorldMapProps {
     /** ISO alpha-2 country code -> visitors. */
     data: { value: string; visitors: number }[];
+    /** Optional city dots; coordinates are city centres. */
+    cities?: CityStat[];
 }
 
 type CountryFeature = Feature<Geometry, { name: string }>;
@@ -46,7 +50,7 @@ const projection = geoNaturalEarth1().fitExtent(
 );
 const pathFor = geoPath(projection);
 
-export default function WorldMap({ data }: WorldMapProps) {
+export default function WorldMap({ data, cities = [] }: WorldMapProps) {
     const [features, setFeatures] = useState<CountryFeature[] | null>(null);
     const [failed, setFailed] = useState(false);
     const [hovered, setHovered] = useState<{
@@ -73,6 +77,29 @@ export default function WorldMap({ data }: WorldMapProps) {
         }
         return { byId, max: Math.max(0, ...byId.values()) };
     }, [data]);
+
+    // Project once; drop anything the projection cannot place. Biggest first so
+    // small dots stay on top and remain hoverable.
+    const dots = useMemo(() => {
+        const maxCity = Math.max(1, ...cities.map((c) => c.visitors));
+        return cities
+            .map((c) => {
+                const xy = projection([c.lng, c.lat]);
+                if (!xy) return null;
+                return {
+                    key: `${c.lat},${c.lng},${c.city ?? ''}`,
+                    x: xy[0],
+                    y: xy[1],
+                    r: 3 + 9 * Math.sqrt(c.visitors / maxCity),
+                    label: [c.city, c.country && countryName(c.country)]
+                        .filter(Boolean)
+                        .join(', '),
+                    visitors: c.visitors,
+                };
+            })
+            .filter((d): d is NonNullable<typeof d> => d !== null)
+            .sort((a, b) => b.visitors - a.visitors);
+    }, [cities]);
 
     const fillFor = (visitors: number) => {
         if (!visitors || max === 0) return 'var(--muted)';
@@ -122,6 +149,28 @@ export default function WorldMap({ data }: WorldMapProps) {
                         </path>
                     );
                 })}
+                {dots.map((d) => (
+                    <circle
+                        key={d.key}
+                        cx={d.x}
+                        cy={d.y}
+                        r={d.r}
+                        className='fill-primary/60 stroke-background'
+                        strokeWidth={1}
+                        onMouseEnter={() =>
+                            setHovered({
+                                name: d.label || 'Unknown city',
+                                visitors: d.visitors,
+                            })
+                        }
+                        onMouseLeave={() => setHovered(null)}
+                    >
+                        <title>
+                            {d.label || 'Unknown city'}: {d.visitors}{' '}
+                            {d.visitors === 1 ? 'visitor' : 'visitors'}
+                        </title>
+                    </circle>
+                ))}
             </svg>
             <div className='flex h-5 items-center justify-between text-xs text-muted-foreground'>
                 <span>
