@@ -42,6 +42,10 @@ dotenvy = "0.15"
 sha2 = "0.10"
 hex = "0.4"
 
+# Verifying the dashboard's signed session cookie (WebSocket auth)
+hmac = "0.12"
+base64 = "0.22"
+
 # GeoIP
 maxminddb = "0.24"
 
