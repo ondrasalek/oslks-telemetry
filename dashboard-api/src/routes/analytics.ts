@@ -31,6 +31,11 @@ router.get(
     analyticsController.getRealtime,
 );
 router.get(
+    '/:website_id/live',
+    enforceApiKeyTeamScope,
+    analyticsController.getLiveFeed,
+);
+router.get(
     '/:website_id/cities',
     enforceApiKeyTeamScope,
     analyticsController.getCityStats,
@@ -50,6 +55,7 @@ router.get(
 
 // Shared analytics
 router.get('/shared/:share_id/realtime', analyticsController.getSharedRealtime);
+router.get('/shared/:share_id/live', analyticsController.getSharedLiveFeed);
 router.get('/shared/:share_id/cities', analyticsController.getSharedCityStats);
 router.get('/shared/:share_id/countries', analyticsController.getSharedCountryStats);
 router.get('/shared/:share_id/stats', analyticsController.getSharedStats);

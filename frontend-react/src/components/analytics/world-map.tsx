@@ -13,6 +13,8 @@ interface WorldMapProps {
     data: { value: string; visitors: number }[];
     /** Optional city dots; coordinates are city centres. */
     cities?: CityStat[];
+    /** Brief "a visit just happened here" markers; keyed by `id`, so new ones animate in. */
+    pulses?: { id: number; lat: number; lng: number }[];
 }
 
 type CountryFeature = Feature<Geometry, { name: string }>;
@@ -50,7 +52,11 @@ const projection = geoNaturalEarth1().fitExtent(
 );
 const pathFor = geoPath(projection);
 
-export default function WorldMap({ data, cities = [] }: WorldMapProps) {
+export default function WorldMap({
+    data,
+    cities = [],
+    pulses = [],
+}: WorldMapProps) {
     const [features, setFeatures] = useState<CountryFeature[] | null>(null);
     const [failed, setFailed] = useState(false);
     const [hovered, setHovered] = useState<{
@@ -100,6 +106,15 @@ export default function WorldMap({ data, cities = [] }: WorldMapProps) {
             .filter((d): d is NonNullable<typeof d> => d !== null)
             .sort((a, b) => b.visitors - a.visitors);
     }, [cities]);
+
+    const pulsePoints = useMemo(
+        () =>
+            pulses.flatMap((p) => {
+                const xy = projection([p.lng, p.lat]);
+                return xy ? [{ id: p.id, x: xy[0], y: xy[1] }] : [];
+            }),
+        [pulses],
+    );
 
     const fillFor = (visitors: number) => {
         if (!visitors || max === 0) return 'var(--muted)';
@@ -170,6 +185,20 @@ export default function WorldMap({ data, cities = [] }: WorldMapProps) {
                             {d.visitors === 1 ? 'visitor' : 'visitors'}
                         </title>
                     </circle>
+                ))}
+                {pulsePoints.map((p) => (
+                    <circle
+                        key={p.id}
+                        cx={p.x}
+                        cy={p.y}
+                        r={4}
+                        // Two expanding rings, then it stays hidden (fill-mode: forwards).
+                        className='pointer-events-none animate-[ping_1.2s_cubic-bezier(0,0,0.2,1)_2_forwards] fill-primary'
+                        style={{
+                            transformBox: 'fill-box',
+                            transformOrigin: 'center',
+                        }}
+                    />
                 ))}
             </svg>
             <div className='flex h-5 items-center justify-between text-xs text-muted-foreground'>

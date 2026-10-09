@@ -97,7 +97,90 @@ impl CreateEvent {
         .execute(pool)
         .await?;
 
+        // Fan the visit out to live dashboards. Best-effort: a failed notify must never
+        // fail event collection.
+        if let Err(e) = sqlx::query("SELECT pg_notify($1, $2)")
+            .bind(LIVE_CHANNEL)
+            .bind(self.live_payload())
+            .execute(pool)
+            .await
+        {
+            tracing::debug!("live notify failed: {}", e);
+        }
+
         Ok(())
+    }
+
+    /// JSON sent to the live feed. Deliberately carries no session id, IP, user agent or
+    /// referrer: just what the dashboard shows (where, which page, when).
+    fn live_payload(&self) -> String {
+        serde_json::json!({
+            "website_id": self.website_id,
+            "type": self.event_type,
+            "name": self.event_name.as_deref().map(|n| truncate(n, 100)),
+            "url": truncate(&self.url, 500),
+            "country": self.country,
+            "city": self.city,
+            "lat": self.latitude,
+            "lng": self.longitude,
+            "at": Utc::now().to_rfc3339(),
+        })
+        .to_string()
+    }
+}
+
+/// First `max` characters, so user-controlled strings can't blow the NOTIFY size limit.
+fn truncate(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}
+
+/// Postgres NOTIFY channel the dashboard API listens on for live visits.
+pub const LIVE_CHANNEL: &str = "radar_events";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> CreateEvent {
+        CreateEvent {
+            website_id: Uuid::nil(),
+            session_id: "secret-session".into(),
+            url: "/pricing".into(),
+            referrer: Some("https://secret.example/".into()),
+            event_type: "pageview".into(),
+            event_name: None,
+            event_data: Some(serde_json::json!({"private": true})),
+            user_agent: Some("Mozilla/secret".into()),
+            country: Some("CZ".into()),
+            city: Some("Prague".into()),
+            latitude: Some(50.08),
+            longitude: Some(14.42),
+            device_type: None,
+            browser: None,
+            os: None,
+        }
+    }
+
+    #[test]
+    fn live_payload_has_only_display_fields() {
+        let v: serde_json::Value = serde_json::from_str(&sample().live_payload()).unwrap();
+        assert_eq!(v["url"], "/pricing");
+        assert_eq!(v["country"], "CZ");
+        assert_eq!(v["city"], "Prague");
+        assert!(v["at"].is_string());
+        let raw = sample().live_payload();
+        for leaked in ["secret-session", "secret.example", "Mozilla", "private"] {
+            assert!(!raw.contains(leaked), "payload leaked {leaked}");
+        }
+    }
+
+    #[test]
+    fn live_payload_fits_notify_limit() {
+        // Postgres rejects NOTIFY payloads of 8000 bytes or more.
+        let mut e = sample();
+        e.url = "/".to_string() + &"a".repeat(20_000);
+        e.event_name = Some("n".repeat(20_000));
+        assert!(e.live_payload().len() < 8000);
     }
 }
 

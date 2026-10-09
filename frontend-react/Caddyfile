@@ -17,6 +17,8 @@
     # API proxy (Node.js Dashboard)
     handle /api/* {
         reverse_proxy dashboard-api:8081 {
+            # Don't buffer: the live feed is a long-lived text/event-stream
+            flush_interval -1
             header_down -WWW-Authenticate
             header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
             header_up X-Forwarded-For {http.request.header.X-Forwarded-For}

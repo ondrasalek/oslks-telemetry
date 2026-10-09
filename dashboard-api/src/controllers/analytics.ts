@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import sql from '../lib/db.js';
 import { isSuperuserSession } from '../lib/access.js';
+import { openLiveStream } from '../lib/live.js';
 
 export const getStats = async (req: Request, res: Response) => {
     const { website_id } = req.params as { website_id: string };
@@ -675,5 +676,46 @@ export const getSharedCityStats = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Shared city stats error:', error);
         res.status(500).json({ error: 'Failed to fetch city stats' });
+    }
+};
+
+/** Live visits (SSE) for a website the caller can read. */
+export const getLiveFeed = async (req: Request, res: Response) => {
+    const { website_id } = req.params as { website_id: string };
+
+    try {
+        if (!(await requireWebsiteAccess(req, res, website_id))) return;
+        await openLiveStream(req, res, website_id);
+    } catch (error) {
+        console.error('Live feed error:', error);
+        if (!res.headersSent) res.status(500).json({ error: 'Failed to open live feed' });
+    }
+};
+
+/** Public live visits (SSE); needs "stats", and omits pages / locations that aren't shared. */
+export const getSharedLiveFeed = async (req: Request, res: Response) => {
+    const { share_id } = req.params as { share_id: string };
+
+    try {
+        const website = await getSharedWebsiteInfo(share_id);
+        if (!website) return res.status(404).json({ error: 'Website not found' });
+        if (!isSharedFeatureEnabled(website.share_config, 'stats')) {
+            return res.status(403).json({ error: 'Feature disabled' });
+        }
+
+        const showPages = isSharedFeatureEnabled(website.share_config, 'pages');
+        const showGeo = isSharedFeatureEnabled(website.share_config, 'geography');
+        await openLiveStream(req, res, website.id, (e) => ({
+            type: e.type,
+            at: e.at,
+            url: showPages ? e.url : undefined,
+            country: showGeo ? e.country : undefined,
+            city: showGeo ? e.city : undefined,
+            lat: showGeo ? e.lat : undefined,
+            lng: showGeo ? e.lng : undefined,
+        }));
+    } catch (error) {
+        console.error('Shared live feed error:', error);
+        if (!res.headersSent) res.status(500).json({ error: 'Failed to open live feed' });
     }
 };
