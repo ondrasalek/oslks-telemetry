@@ -25,20 +25,20 @@ RUN cargo build --release --bin oslks-telemetry \
     && strip target/release/oslks-telemetry
 
 # ── 2. Dashboard API ─────────────────────────────────────
-FROM node:20-bookworm-slim AS api-builder
+FROM node:24-bookworm-slim AS api-builder
 WORKDIR /app
 COPY dashboard-api/package*.json ./
 RUN npm ci
 COPY dashboard-api/ .
 RUN npm run build
 
-FROM node:20-bookworm-slim AS api-deps
+FROM node:24-bookworm-slim AS api-deps
 WORKDIR /app
 COPY dashboard-api/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # ── 3. Frontend SPA ──────────────────────────────────────
-FROM node:20-bookworm-slim AS frontend-builder
+FROM node:24-bookworm-slim AS frontend-builder
 WORKDIR /app
 COPY frontend-react/package.json frontend-react/package-lock.json ./
 RUN npm ci
@@ -52,7 +52,7 @@ ENV VITE_OSLKS_WEBSITE_ID=$VITE_OSLKS_WEBSITE_ID
 RUN npm run build
 
 # ── 4. Runtime ───────────────────────────────────────────
-FROM node:20-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 
 ARG S6_OVERLAY_VERSION=3.2.0.2
 
