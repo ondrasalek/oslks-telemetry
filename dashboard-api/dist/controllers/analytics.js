@@ -1,4 +1,6 @@
 import sql from '../lib/db.js';
+import { isSuperuserSession } from '../lib/access.js';
+import { openLiveStream } from '../lib/live.js';
 export const getStats = async (req, res) => {
     const { website_id } = req.params;
     const { start_at, end_at, url, referrer, os, browser, device, country, event_name, } = req.query;
@@ -8,10 +10,12 @@ export const getStats = async (req, res) => {
     try {
         // Basic permission check
         console.log(`[Analytics] Fetching stats for website ${website_id} (User: ${userId})`);
+        const superuser = await isSuperuserSession(req, userId);
         const websitesData = await sql `
             SELECT 1 FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id}::uuid AND tm.user_id = ${userId}::uuid
+            WHERE w.id = ${website_id}::uuid AND (${superuser}::boolean OR EXISTS (
+                SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+            ))
             LIMIT 1
         `;
         if (websitesData.length === 0) {
@@ -77,10 +81,12 @@ export const getMetrics = async (req, res) => {
         return res.status(400).json({ error: 'Invalid metric type' });
     }
     try {
+        const superuser = await isSuperuserSession(req, userId);
         const websitesData = await sql `
             SELECT 1 FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id} AND tm.user_id = ${userId}
+            WHERE w.id = ${website_id}::uuid AND (${superuser}::boolean OR EXISTS (
+                SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+            ))
             LIMIT 1
         `;
         if (websitesData.length === 0)
@@ -111,10 +117,12 @@ export const getActiveVisitors = async (req, res) => {
     if (!userId)
         return res.status(401).json({ error: 'Unauthorized' });
     try {
+        const superuser = await isSuperuserSession(req, userId);
         const websitesData = await sql `
             SELECT 1 FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id} AND tm.user_id = ${userId}
+            WHERE w.id = ${website_id}::uuid AND (${superuser}::boolean OR EXISTS (
+                SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+            ))
             LIMIT 1
         `;
         if (websitesData.length === 0)
@@ -132,6 +140,156 @@ export const getActiveVisitors = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch active visitors' });
     }
 };
+/** Resolves a website the caller may read, or sends the error response and returns null. */
+const requireWebsiteAccess = async (req, res, websiteId) => {
+    const userId = req.session.userId;
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return false;
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(websiteId)) {
+        res.status(404).json({ error: 'Website not found' });
+        return false;
+    }
+    const superuser = await isSuperuserSession(req, userId);
+    const rows = await sql `
+        SELECT 1 FROM websites w
+        WHERE w.id = ${websiteId}::uuid AND (${superuser}::boolean OR EXISTS (
+            SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+        ))
+        LIMIT 1
+    `;
+    if (rows.length === 0) {
+        res.status(404).json({ error: 'Website not found' });
+        return false;
+    }
+    return true;
+};
+/** Distinct visitors per country for the map (the generic /metrics counts raw events). */
+const queryCountries = (websiteId, startAt, endAt) => sql `
+    SELECT country AS value,
+           COUNT(DISTINCT session_id)::int AS visitors,
+           COUNT(*)::int AS views
+    FROM events
+    WHERE website_id = ${websiteId}::uuid
+      AND country IS NOT NULL
+      AND (${startAt || null}::timestamptz IS NULL OR created_at >= ${startAt || null}::timestamptz)
+      AND (${endAt || null}::timestamptz IS NULL OR created_at <= ${endAt || null}::timestamptz)
+    GROUP BY country
+    ORDER BY visitors DESC
+`;
+/**
+ * Visitors per city, for the map dots. Only events recorded after coordinates were
+ * introduced have them, so older traffic still shows at country level only.
+ */
+const queryCities = (websiteId, startAt, endAt) => sql `
+    SELECT city,
+           country,
+           round(latitude::numeric, 2)::float8 AS lat,
+           round(longitude::numeric, 2)::float8 AS lng,
+           COUNT(DISTINCT session_id)::int AS visitors
+    FROM events
+    WHERE website_id = ${websiteId}::uuid
+      AND latitude IS NOT NULL AND longitude IS NOT NULL
+      AND (${startAt || null}::timestamptz IS NULL OR created_at >= ${startAt || null}::timestamptz)
+      AND (${endAt || null}::timestamptz IS NULL OR created_at <= ${endAt || null}::timestamptz)
+    GROUP BY city, country, round(latitude::numeric, 2), round(longitude::numeric, 2)
+    ORDER BY visitors DESC
+    LIMIT 200
+`;
+const REALTIME_MINUTES = 30;
+/** Last-30-minutes snapshot: totals, a per-minute series, top pages and countries. */
+const queryRealtime = async (websiteId) => {
+    const [totals] = await sql `
+        SELECT COUNT(DISTINCT session_id)::int AS visitors,
+               COUNT(*)::int AS views,
+               COUNT(DISTINCT session_id) FILTER (WHERE created_at >= NOW() - INTERVAL '5 minutes')::int AS active
+        FROM events
+        WHERE website_id = ${websiteId}::uuid
+          AND created_at >= NOW() - make_interval(mins => ${REALTIME_MINUTES})
+    `;
+    // generate_series gives every minute a bucket, so quiet minutes show as zero.
+    const per_minute = await sql `
+        SELECT m.minute AS timestamp,
+               COALESCE(COUNT(DISTINCT e.session_id), 0)::int AS visitors,
+               COUNT(e.session_id)::int AS views
+        FROM generate_series(
+            date_trunc('minute', NOW()) - make_interval(mins => ${REALTIME_MINUTES - 1}),
+            date_trunc('minute', NOW()),
+            INTERVAL '1 minute'
+        ) AS m(minute)
+        LEFT JOIN events e
+          ON e.website_id = ${websiteId}::uuid
+         AND e.created_at >= m.minute
+         AND e.created_at < m.minute + INTERVAL '1 minute'
+        GROUP BY m.minute
+        ORDER BY m.minute ASC
+    `;
+    const top = (column, limit) => sql `
+        SELECT ${sql(column)} AS value, COUNT(DISTINCT session_id)::int AS visitors
+        FROM events
+        WHERE website_id = ${websiteId}::uuid
+          AND created_at >= NOW() - make_interval(mins => ${REALTIME_MINUTES})
+          AND ${sql(column)} IS NOT NULL
+        GROUP BY ${sql(column)}
+        ORDER BY visitors DESC
+        LIMIT ${limit}
+    `;
+    // Countries are unbounded (the map shades all of them); the UI trims its list.
+    const [pages, countries, cities] = await Promise.all([
+        top('url', 8),
+        top('country', 300),
+        queryCities(websiteId, new Date(Date.now() - REALTIME_MINUTES * 60_000).toISOString()),
+    ]);
+    return {
+        window_minutes: REALTIME_MINUTES,
+        visitors: totals?.visitors ?? 0,
+        views: totals?.views ?? 0,
+        active: totals?.active ?? 0,
+        per_minute,
+        pages,
+        countries,
+        cities,
+    };
+};
+export const getCountryStats = async (req, res) => {
+    const { website_id } = req.params;
+    const { start_at, end_at } = req.query;
+    try {
+        if (!(await requireWebsiteAccess(req, res, website_id)))
+            return;
+        res.json(await queryCountries(website_id, start_at, end_at));
+    }
+    catch (error) {
+        console.error('Country stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch country stats' });
+    }
+};
+export const getCityStats = async (req, res) => {
+    const { website_id } = req.params;
+    const { start_at, end_at } = req.query;
+    try {
+        if (!(await requireWebsiteAccess(req, res, website_id)))
+            return;
+        res.json(await queryCities(website_id, start_at, end_at));
+    }
+    catch (error) {
+        console.error('City stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch city stats' });
+    }
+};
+export const getRealtime = async (req, res) => {
+    const { website_id } = req.params;
+    try {
+        if (!(await requireWebsiteAccess(req, res, website_id)))
+            return;
+        res.json(await queryRealtime(website_id));
+    }
+    catch (error) {
+        console.error('Realtime error:', error);
+        res.status(500).json({ error: 'Failed to fetch realtime data' });
+    }
+};
 export const getChartData = async (req, res) => {
     const { website_id } = req.params;
     const { start_at, end_at, interval } = req.query;
@@ -139,10 +297,12 @@ export const getChartData = async (req, res) => {
     if (!userId)
         return res.status(401).json({ error: 'Unauthorized' });
     try {
+        const superuser = await isSuperuserSession(req, userId);
         const websitesData = await sql `
             SELECT 1 FROM websites w
-            JOIN team_members tm ON w.team_id = tm.team_id
-            WHERE w.id = ${website_id} AND tm.user_id = ${userId}
+            WHERE w.id = ${website_id}::uuid AND (${superuser}::boolean OR EXISTS (
+                SELECT 1 FROM team_members tm WHERE tm.team_id = w.team_id AND tm.user_id = ${userId}::uuid
+            ))
             LIMIT 1
         `;
         if (websitesData.length === 0)
@@ -181,11 +341,13 @@ export const getTeamStats = async (req, res) => {
         return res.status(401).json({ error: 'Unauthorized' });
     try {
         // Permission check: Is user a member of the team?
-        const members = await sql `
-            SELECT 1 FROM team_members 
-            WHERE team_id = ${team_id}::uuid AND user_id = ${userId}::uuid
-            LIMIT 1
-        `;
+        const members = (await isSuperuserSession(req, userId))
+            ? [1]
+            : await sql `
+                SELECT 1 FROM team_members
+                WHERE team_id = ${team_id}::uuid AND user_id = ${userId}::uuid
+                LIMIT 1
+            `;
         if (members.length === 0)
             return res.status(403).json({ error: 'Forbidden' });
         const stats = await sql `
@@ -384,6 +546,109 @@ export const getSharedActiveVisitors = async (req, res) => {
         res.status(500).json({
             error: 'Failed to fetch shared active visitors',
         });
+    }
+};
+export const getSharedCountryStats = async (req, res) => {
+    const { share_id } = req.params;
+    const { start_at, end_at } = req.query;
+    try {
+        const website = await getSharedWebsiteInfo(share_id);
+        if (!website)
+            return res.status(404).json({ error: 'Website not found' });
+        if (!isSharedFeatureEnabled(website.share_config, 'geography')) {
+            return res.status(403).json({ error: 'Feature disabled' });
+        }
+        res.json(await queryCountries(website.id, start_at, end_at));
+    }
+    catch (error) {
+        console.error('Shared country stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch country stats' });
+    }
+};
+/** Public realtime: needs "stats"; pages and countries are only included when those are shared too. */
+export const getSharedRealtime = async (req, res) => {
+    const { share_id } = req.params;
+    try {
+        const website = await getSharedWebsiteInfo(share_id);
+        if (!website)
+            return res.status(404).json({ error: 'Website not found' });
+        if (!isSharedFeatureEnabled(website.share_config, 'stats')) {
+            return res.status(403).json({ error: 'Feature disabled' });
+        }
+        const data = await queryRealtime(website.id);
+        res.json({
+            ...data,
+            pages: isSharedFeatureEnabled(website.share_config, 'pages') ? data.pages : [],
+            countries: isSharedFeatureEnabled(website.share_config, 'geography')
+                ? data.countries
+                : [],
+            cities: isSharedFeatureEnabled(website.share_config, 'geography')
+                ? data.cities
+                : [],
+        });
+    }
+    catch (error) {
+        console.error('Shared realtime error:', error);
+        res.status(500).json({ error: 'Failed to fetch realtime data' });
+    }
+};
+export const getSharedCityStats = async (req, res) => {
+    const { share_id } = req.params;
+    const { start_at, end_at } = req.query;
+    try {
+        const website = await getSharedWebsiteInfo(share_id);
+        if (!website)
+            return res.status(404).json({ error: 'Website not found' });
+        if (!isSharedFeatureEnabled(website.share_config, 'geography')) {
+            return res.status(403).json({ error: 'Feature disabled' });
+        }
+        res.json(await queryCities(website.id, start_at, end_at));
+    }
+    catch (error) {
+        console.error('Shared city stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch city stats' });
+    }
+};
+/** Live visits (SSE) for a website the caller can read. */
+export const getLiveFeed = async (req, res) => {
+    const { website_id } = req.params;
+    try {
+        if (!(await requireWebsiteAccess(req, res, website_id)))
+            return;
+        await openLiveStream(req, res, website_id);
+    }
+    catch (error) {
+        console.error('Live feed error:', error);
+        if (!res.headersSent)
+            res.status(500).json({ error: 'Failed to open live feed' });
+    }
+};
+/** Public live visits (SSE); needs "stats", and omits pages / locations that aren't shared. */
+export const getSharedLiveFeed = async (req, res) => {
+    const { share_id } = req.params;
+    try {
+        const website = await getSharedWebsiteInfo(share_id);
+        if (!website)
+            return res.status(404).json({ error: 'Website not found' });
+        if (!isSharedFeatureEnabled(website.share_config, 'stats')) {
+            return res.status(403).json({ error: 'Feature disabled' });
+        }
+        const showPages = isSharedFeatureEnabled(website.share_config, 'pages');
+        const showGeo = isSharedFeatureEnabled(website.share_config, 'geography');
+        await openLiveStream(req, res, website.id, (e) => ({
+            type: e.type,
+            at: e.at,
+            url: showPages ? e.url : undefined,
+            country: showGeo ? e.country : undefined,
+            city: showGeo ? e.city : undefined,
+            lat: showGeo ? e.lat : undefined,
+            lng: showGeo ? e.lng : undefined,
+        }));
+    }
+    catch (error) {
+        console.error('Shared live feed error:', error);
+        if (!res.headersSent)
+            res.status(500).json({ error: 'Failed to open live feed' });
     }
 };
 //# sourceMappingURL=analytics.js.map

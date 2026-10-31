@@ -1,11 +1,26 @@
 import bcrypt from 'bcryptjs';
 import sql from '../lib/db.js';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const REMEMBER_MS = 30 * DAY_MS;
+/**
+ * "Remember this device": a persistent cookie that lives 30 days (sliding).
+ * Otherwise a browser-session cookie; with no cookie expiry the session store
+ * falls back to its default 1-day row TTL.
+ */
+const applySessionLifetime = (req, remember) => {
+    if (remember) {
+        req.session.cookie.maxAge = REMEMBER_MS;
+    }
+    else {
+        req.session.cookie.maxAge = undefined;
+    }
+};
 export const login = async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, remember } = req.body;
     console.log(`Login attempt for: ${email}`);
     try {
         const users = await sql `
-            SELECT id, email, name, password, role 
+            SELECT id, email, name, password, role, must_change_password 
             FROM users 
             WHERE email = ${email}
             LIMIT 1
@@ -26,14 +41,18 @@ export const login = async (req, res) => {
         }
         // Fetch primary team membership
         const memberships = await sql `
-            SELECT team_id, role
-            FROM team_members
-            WHERE user_id = ${user.id}::uuid
+            SELECT tm.team_id, tm.role
+            FROM team_members tm
+            JOIN users u ON u.id = tm.user_id
+            WHERE tm.user_id = ${user.id}::uuid
+            ORDER BY (tm.team_id = u.current_team_id) DESC, tm.joined_at ASC
             LIMIT 1
         `;
         const membership = memberships[0];
         // Store user in session
         req.session.userId = user.id;
+        req.session.mustChangePassword = user.must_change_password === true;
+        applySessionLifetime(req, remember === true);
         console.log(`Successfully logged in user ${user.id}. Session ID: ${req.sessionID}`);
         const sessionUser = {
             id: user.id,
@@ -42,6 +61,7 @@ export const login = async (req, res) => {
             role: user.role,
             team_id: membership?.team_id || null,
             team_role: membership?.role || null,
+            must_change_password: user.must_change_password === true,
         };
         res.json({ success: true, user: sessionUser });
     }
@@ -73,8 +93,8 @@ export const register = async (req, res) => {
             `;
             // Create a default "Personal" team for the user
             const [team] = await tx `
-                INSERT INTO teams (name)
-                VALUES ('Personal')
+                INSERT INTO teams (name, slug)
+                VALUES ('Personal', ${'personal-' + Math.random().toString(36).substring(2, 8)})
                 RETURNING id
             `;
             // Make the user the owner of the team
@@ -89,6 +109,7 @@ export const register = async (req, res) => {
             throw new Error('Failed to create user');
         }
         req.session.userId = user.id;
+        applySessionLifetime(req, true);
         console.log(`Registered and logged in user ${user.id}. Created personal team ${teamId}`);
         res.status(201).json({
             success: true,
@@ -129,7 +150,7 @@ export const me = async (req, res) => {
     }
     try {
         const users = await sql `
-            SELECT id, email, name, role 
+            SELECT id, email, name, role, must_change_password
             FROM users 
             WHERE id = ${userId}::uuid
             LIMIT 1
@@ -140,9 +161,11 @@ export const me = async (req, res) => {
             return res.json(null);
         }
         const memberships = await sql `
-            SELECT team_id, role
-            FROM team_members
-            WHERE user_id = ${user.id}::uuid
+            SELECT tm.team_id, tm.role
+            FROM team_members tm
+            JOIN users u ON u.id = tm.user_id
+            WHERE tm.user_id = ${user.id}::uuid
+            ORDER BY (tm.team_id = u.current_team_id) DESC, tm.joined_at ASC
             LIMIT 1
         `;
         const membership = memberships[0];
@@ -154,11 +177,44 @@ export const me = async (req, res) => {
             role: user.role,
             team_id: membership?.team_id || null,
             team_role: membership?.role || null,
+            must_change_password: user.must_change_password === true,
         });
     }
     catch (error) {
         console.error('Auth check (me) error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+};
+export const changePassword = async (req, res) => {
+    const userId = req.session.userId;
+    if (!userId)
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const { current_password, new_password } = req.body ?? {};
+    if (typeof current_password !== 'string' || typeof new_password !== 'string') {
+        return res.json({ success: false, error: 'Current and new password are required' });
+    }
+    if (new_password.length < 8) {
+        return res.json({ success: false, error: 'New password must be at least 8 characters' });
+    }
+    if (new_password === current_password) {
+        return res.json({ success: false, error: 'New password must differ from the current one' });
+    }
+    try {
+        const [user] = await sql `SELECT password FROM users WHERE id = ${userId}::uuid LIMIT 1`;
+        if (!user?.password || !(await bcrypt.compare(current_password, user.password))) {
+            return res.json({ success: false, error: 'Current password is incorrect' });
+        }
+        const hashed = await bcrypt.hash(new_password, 10);
+        await sql `
+            UPDATE users SET password = ${hashed}, must_change_password = FALSE, updated_at = NOW()
+            WHERE id = ${userId}::uuid
+        `;
+        req.session.mustChangePassword = false;
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
 };
 //# sourceMappingURL=auth.js.map

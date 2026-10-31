@@ -3,4 +3,5 @@ export declare const login: (req: Request, res: Response) => Promise<Response<an
 export declare const register: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
 export declare const logout: (req: Request, res: Response) => void;
 export declare const me: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const changePassword: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
 //# sourceMappingURL=auth.d.ts.map

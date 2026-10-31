@@ -7,8 +7,9 @@ import authRoutes from './routes/auth.js';
 import websiteRoutes from './routes/websites.js';
 import analyticsRoutes from './routes/analytics.js';
 import apiKeyRoutes from './routes/api-keys.js';
+import installRoutes from './routes/install.js';
+import { getEnvConfig } from './controllers/settings.js';
 import { apiKeyAuth, sessionOnly } from './middleware/apiKeyAuth.js';
-import sql from './lib/db.js';
 // Only load .env if variables aren't already set by the environment (like Docker Compose)
 dotenv.config({ override: false });
 const app = express();
@@ -57,12 +58,15 @@ const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || 'local_dev_secret_key_change_me',
     resave: false,
     saveUninitialized: false,
+    // Refresh the cookie on every response so "remember this device" sessions
+    // slide forward while the dashboard is in use.
+    rolling: true,
     name: 'oslks_session',
     cookie: {
         secure: true, // Always true since we are behind Traefik HTTPS
         httpOnly: true,
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 24 * 60 * 60 * 1000, // default; login overrides per session (see auth controller)
     },
 });
 // Header-based authentication for server-to-server callers. Runs before the
@@ -70,6 +74,19 @@ const sessionMiddleware = session({
 // is created and no cookie is issued for machine traffic.
 app.use(apiKeyAuth);
 app.use((req, res, next) => req.apiKey ? next() : sessionMiddleware(req, res, next));
+// A one-time password must be replaced before anything else is reachable.
+app.use((req, res, next) => {
+    if (!req.apiKey &&
+        req.session?.mustChangePassword &&
+        !req.path.startsWith('/api/auth/') &&
+        req.path !== '/health') {
+        return res.status(403).json({
+            error: 'Password change required',
+            code: 'PASSWORD_CHANGE_REQUIRED',
+        });
+    }
+    next();
+});
 // Logging middleware
 app.use((req, res, next) => {
     const auth = req.apiKey
@@ -91,21 +108,14 @@ app.use('/api/teams', sessionOnly, teamRoutes);
 app.use('/api/users', sessionOnly, userRoutes);
 app.use('/api/settings', sessionOnly, settingsRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
+app.use('/api/install', sessionOnly, installRoutes);
+app.get('/api/config/env', sessionOnly, getEnvConfig);
 // Health check
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
         service: 'dashboard-api',
     });
-});
-app.get('/api/users/count', async (req, res) => {
-    try {
-        const result = await sql `SELECT count(*)::int FROM users`;
-        res.json({ count: result[0]?.count || 0 });
-    }
-    catch (error) {
-        res.status(500).json({ error: 'Database connection failed' });
-    }
 });
 app.listen(Number(port), '0.0.0.0', () => {
     console.log(`Dashboard API listening on port ${port} (on 0.0.0.0)`);

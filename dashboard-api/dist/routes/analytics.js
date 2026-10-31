@@ -6,9 +6,17 @@ router.get('/:website_id/stats', enforceApiKeyTeamScope, analyticsController.get
 router.get('/:website_id/metrics', enforceApiKeyTeamScope, analyticsController.getMetrics);
 router.get('/:website_id/chart', enforceApiKeyTeamScope, analyticsController.getChartData);
 router.get('/:website_id/active', enforceApiKeyTeamScope, analyticsController.getActiveVisitors);
+router.get('/:website_id/realtime', enforceApiKeyTeamScope, analyticsController.getRealtime);
+router.get('/:website_id/live', enforceApiKeyTeamScope, analyticsController.getLiveFeed);
+router.get('/:website_id/cities', enforceApiKeyTeamScope, analyticsController.getCityStats);
+router.get('/:website_id/countries', enforceApiKeyTeamScope, analyticsController.getCountryStats);
 // Team stats
 router.get('/team/:team_id/stats', enforceApiKeyTeamScope, analyticsController.getTeamStats);
 // Shared analytics
+router.get('/shared/:share_id/realtime', analyticsController.getSharedRealtime);
+router.get('/shared/:share_id/live', analyticsController.getSharedLiveFeed);
+router.get('/shared/:share_id/cities', analyticsController.getSharedCityStats);
+router.get('/shared/:share_id/countries', analyticsController.getSharedCountryStats);
 router.get('/shared/:share_id/stats', analyticsController.getSharedStats);
 router.get('/shared/:share_id/metrics', analyticsController.getSharedMetrics);
 router.get('/shared/:share_id/chart', analyticsController.getSharedChartData);
