@@ -19,10 +19,18 @@ export interface GlobePoint {
     label?: string;
 }
 
+/** A "a visit just happened here" marker; keyed by `id`, so each new one animates once. */
+export interface GlobePulse {
+    id: number;
+    lat: number;
+    lng: number;
+}
+
 interface GlobeProps {
     /** ISO alpha-2 country code -> visitors; tints the countries. */
     data?: { value: string; visitors: number }[];
     points?: GlobePoint[];
+    pulses?: GlobePulse[];
     /**
      * A decorative backdrop: quiet colours, pulsing dots, no hover or dragging, hidden
      * from assistive tech. `className` must give the box its size.
@@ -37,6 +45,11 @@ type Hover = { name: string; visitors: number };
 // Stable defaults: a fresh `[]` per render would rebuild the scene every time.
 const NO_DATA: NonNullable<GlobeProps['data']> = [];
 const NO_POINTS: GlobePoint[] = [];
+const NO_PULSES: GlobePulse[] = [];
+
+/** One expanding ring lasts this long; a new marker plays two of them. */
+const PULSE_RING_MS = 1200;
+const PULSE_MS = PULSE_RING_MS * 2;
 
 const SPHERE = { type: 'Sphere' } as const;
 const PADDING = 6;
@@ -87,6 +100,7 @@ function startRotation(
 export default function Globe({
     data = NO_DATA,
     points = NO_POINTS,
+    pulses = NO_PULSES,
     ambient = false,
     className,
 }: GlobeProps) {
@@ -94,6 +108,10 @@ export default function Globe({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     // Lives outside the effect so a new range or theme does not snap the globe back.
     const rotationRef = useRef<Rotation | null>(null);
+    // Pulses are tracked by id across scene rebuilds, so a marker never replays.
+    const pulsesRef = useRef(pulses);
+    const pulseStarts = useRef(new Map<number, number>());
+    const wakeRef = useRef<(() => void) | null>(null);
     const [features, setFeatures] = useState<CountryFeature[] | null>(null);
     const [failed, setFailed] = useState(false);
     const [hover, setHover] = useState<Hover | null>(null);
@@ -123,6 +141,12 @@ export default function Globe({
         () => [...points].sort((a, b) => b.visitors - a.visitors),
         [points],
     );
+
+    // New markers do not rebuild the scene; they just wake the frame loop.
+    useEffect(() => {
+        pulsesRef.current = pulses;
+        wakeRef.current?.();
+    }, [pulses]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -171,6 +195,10 @@ export default function Globe({
 
         // ── interaction state ────────────────────────────────
         let dirty = true;
+        let animating = false;
+        wakeRef.current = () => {
+            dirty = true;
+        };
         let dragging = false;
         let hovering = false;
         let resumeAt = 0;
@@ -360,6 +388,43 @@ export default function Globe({
             });
             ctx.globalAlpha = 1;
 
+            // "A visit just happened here": two expanding rings per new marker.
+            const starts = pulseStarts.current;
+            const live = pulsesRef.current;
+            for (const id of starts.keys()) {
+                if (!live.some((p) => p.id === id)) starts.delete(id);
+            }
+            animating = false;
+            for (const p of live) {
+                let start = starts.get(p.id);
+                if (start === undefined) {
+                    start = now;
+                    starts.set(p.id, now);
+                }
+                const age = now - start;
+                if (age > PULSE_MS) continue;
+                animating = true;
+                if (geoDistance([p.lng, p.lat], facing) > Math.PI / 2 - 0.03) {
+                    continue;
+                }
+                const xy = projection([p.lng, p.lat]);
+                if (!xy) continue;
+                const t = (age % PULSE_RING_MS) / PULSE_RING_MS;
+                ctx.beginPath();
+                ctx.arc(xy[0], xy[1], (4 + 10 * t) * scale, 0, Math.PI * 2);
+                ctx.globalAlpha = (1 - t) * 0.8;
+                ctx.strokeStyle = colors.primary;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(xy[0], xy[1], 2.5 * scale, 0, Math.PI * 2);
+                ctx.globalAlpha = 0.9;
+                ctx.fillStyle = colors.primary;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+            ctx.globalAlpha = 1;
+
             ctx.beginPath();
             path(SPHERE);
             ctx.globalAlpha = ambient ? 0.22 : 0.25;
@@ -392,7 +457,7 @@ export default function Globe({
                     dirty = true;
                 }
             }
-            if (dirty || (ambient && !reduceMotion)) {
+            if (dirty || animating || (ambient && !reduceMotion)) {
                 dirty = false;
                 draw(now);
             }
@@ -482,6 +547,7 @@ export default function Globe({
 
         resize();
         return () => {
+            wakeRef.current = null;
             stop();
             sizeObserver.disconnect();
             visibility.disconnect();

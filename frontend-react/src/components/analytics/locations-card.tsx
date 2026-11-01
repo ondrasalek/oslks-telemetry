@@ -5,63 +5,20 @@ import {
     useCountryStats,
     type AnalyticsScope,
 } from '@/hooks/use-analytics';
+import { MAP_VIEWS, useMapView } from '@/hooks/use-map-view';
 import { countryFlag, countryName } from '@/lib/countries';
-import { cn } from '@/lib/utils';
 import type { DateRange } from '@/types/api';
 import { BreakdownTable, type BreakdownRow } from './breakdown-table';
-import type { GlobePoint } from './globe';
+import { cityPoints } from './city-points';
 import { Panel, SectionCard } from './section-card';
+import { SegmentedToggle } from './segmented-toggle';
 
 // The map and the globe pull in d3-geo and the country shapes; only load what is shown.
 const WorldMap = lazy(() => import('./world-map'));
 const Globe = lazy(() => import('./globe'));
 
 const MODES = ['countries', 'cities'] as const;
-const VIEWS = ['map', 'globe'] as const;
 type Mode = (typeof MODES)[number];
-type View = (typeof VIEWS)[number];
-
-const VIEW_KEY = 'locations-view';
-
-/** The last view the viewer picked; a per-viewer convenience, so storage may be unavailable. */
-function readView(): View {
-    try {
-        return localStorage.getItem(VIEW_KEY) === 'globe' ? 'globe' : 'map';
-    } catch {
-        return 'map';
-    }
-}
-
-function Toggle<T extends string>({
-    value,
-    options,
-    onChange,
-}: {
-    value: T;
-    options: readonly T[];
-    onChange: (next: T) => void;
-}) {
-    return (
-        <div className='inline-flex rounded-md border bg-background p-0.5 text-xs'>
-            {options.map((option) => (
-                <button
-                    key={option}
-                    type='button'
-                    aria-pressed={value === option}
-                    onClick={() => onChange(option)}
-                    className={cn(
-                        'rounded px-2.5 py-1 font-medium capitalize transition-colors',
-                        value === option
-                            ? 'bg-accent text-foreground'
-                            : 'text-muted-foreground hover:text-foreground',
-                    )}
-                >
-                    {option}
-                </button>
-            ))}
-        </div>
-    );
-}
 
 /** Where visitors are: the world map or a globe next to a ranked list of countries or cities. */
 export function LocationsCard({
@@ -72,18 +29,9 @@ export function LocationsCard({
     range: DateRange;
 }) {
     const [mode, setMode] = useState<Mode>('countries');
-    const [view, setView] = useState<View>(readView);
+    const [view, setView] = useMapView();
     const countries = useCountryStats(scope, range);
     const cities = useCityStats(scope, range);
-
-    const chooseView = (next: View) => {
-        setView(next);
-        try {
-            localStorage.setItem(VIEW_KEY, next);
-        } catch {
-            // Storage unavailable: the choice just lasts for this visit.
-        }
-    };
 
     const rows = useMemo<BreakdownRow[] | undefined>(() => {
         if (mode === 'countries') {
@@ -133,16 +81,8 @@ export function LocationsCard({
             })),
         [countries.data],
     );
-    const points = useMemo<GlobePoint[]>(
-        () =>
-            (cities.data ?? []).map((c) => ({
-                lat: c.lat,
-                lng: c.lng,
-                visitors: c.visitors,
-                label: [c.city, c.country && countryName(c.country)]
-                    .filter(Boolean)
-                    .join(', '),
-            })),
+    const points = useMemo(
+        () => cityPoints(cities.data ?? []),
         [cities.data],
     );
 
@@ -156,8 +96,16 @@ export function LocationsCard({
             stale={active.isPlaceholderData}
             actions={
                 <div className='flex flex-wrap items-center justify-end gap-2'>
-                    <Toggle value={view} options={VIEWS} onChange={chooseView} />
-                    <Toggle value={mode} options={MODES} onChange={setMode} />
+                    <SegmentedToggle
+                        value={view}
+                        options={MAP_VIEWS}
+                        onChange={setView}
+                    />
+                    <SegmentedToggle
+                        value={mode}
+                        options={MODES}
+                        onChange={setMode}
+                    />
                 </div>
             }
         >

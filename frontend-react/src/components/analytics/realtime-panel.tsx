@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
     Bar,
@@ -14,9 +14,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePublicRealtime, useRealtime } from '@/hooks/use-analytics';
 import type { RealtimeData } from '@/types/api';
 import { useLiveFeed, type LiveVisit } from '@/hooks/use-live-feed';
+import { MAP_VIEWS, useMapView } from '@/hooks/use-map-view';
 import { countryFlag, countryName } from '@/lib/countries';
+import { cityPoints } from './city-points';
+import { SegmentedToggle } from './segmented-toggle';
 
 const WorldMap = lazy(() => import('./world-map'));
+const Globe = lazy(() => import('./globe'));
 
 function Stat({
     label,
@@ -186,10 +190,25 @@ function RealtimeView({
     /** Latest visits pushed over the live stream, newest first. */
     live: { visits: LiveVisit[]; connected: boolean };
 }) {
-    const pulses = live.visits
-        .filter((v) => v.lat != null && v.lng != null)
-        .slice(0, 10)
-        .map((v) => ({ id: v.id, lat: v.lat as number, lng: v.lng as number }));
+    const [view, setView] = useMapView();
+    // Memoised: the globe rebuilds its scene whenever these change identity.
+    const countries = data?.countries;
+    const cities = data?.cities;
+    const mapData = useMemo(() => countries ?? [], [countries]);
+    const points = useMemo(() => cityPoints(cities ?? []), [cities]);
+    const visits = live.visits;
+    const pulses = useMemo(
+        () =>
+            visits
+                .filter((v) => v.lat != null && v.lng != null)
+                .slice(0, 10)
+                .map((v) => ({
+                    id: v.id,
+                    lat: v.lat as number,
+                    lng: v.lng as number,
+                })),
+        [visits],
+    );
 
     return (
         <div className='space-y-6 animate-in fade-in duration-500'>
@@ -291,22 +310,42 @@ function RealtimeView({
 
             {showCountries && (
                 <Card>
-                    <CardHeader className='pb-2'>
+                    <CardHeader className='flex items-center justify-between gap-3 pb-2'>
                         <CardTitle className='text-base font-semibold'>
                             Where they are right now
                         </CardTitle>
+                        <SegmentedToggle
+                            value={view}
+                            options={MAP_VIEWS}
+                            onChange={setView}
+                        />
                     </CardHeader>
                     <CardContent>
                         <Suspense
                             fallback={
-                                <Skeleton className='aspect-[2/1] w-full' />
+                                <Skeleton
+                                    className={
+                                        view === 'globe'
+                                            ? 'h-80 w-full sm:h-96'
+                                            : 'aspect-[2/1] w-full'
+                                    }
+                                />
                             }
                         >
-                            <WorldMap
-                                data={data?.countries ?? []}
-                                cities={data?.cities ?? []}
-                                pulses={pulses}
-                            />
+                            {view === 'globe' ? (
+                                <Globe
+                                    data={mapData}
+                                    points={points}
+                                    pulses={pulses}
+                                    className='h-80 w-full sm:h-96'
+                                />
+                            ) : (
+                                <WorldMap
+                                    data={mapData}
+                                    cities={cities ?? []}
+                                    pulses={pulses}
+                                />
+                            )}
                         </Suspense>
                     </CardContent>
                 </Card>
