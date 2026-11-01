@@ -1,16 +1,14 @@
 import { useParams } from 'react-router-dom';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { usePublicWebsite } from '@/hooks/use-websites';
-import { usePublicStats, usePublicChartData } from '@/hooks/use-analytics';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AnalyticsChart } from '@/components/analytics/analytics-chart';
-import { PublicMetricsCard } from '@/components/analytics/public-metrics-card';
-import { DateFilter } from '@/components/analytics/date-filter';
-import { PublicCountryMapCard } from '@/components/analytics/country-map-card';
+import {
+    TrafficAnalytics,
+    type TrafficFeatures,
+} from '@/components/analytics/traffic-analytics';
 import { PublicRealtimePanel } from '@/components/analytics/realtime-panel';
 import { cn } from '@/lib/utils';
-import { getDateRangeFromFilter } from '@/lib/dates';
 import { Globe } from 'lucide-react';
 
 export function PublicSharePage() {
@@ -21,30 +19,7 @@ export function PublicSharePage() {
         error,
     } = usePublicWebsite(share_id ?? '');
 
-    const [dateFilter, setDateFilter] = useState<string>('7d');
     const [tab, setTab] = useState<'overview' | 'realtime'>('overview');
-
-    const { from, to } = useMemo(() => {
-        return getDateRangeFromFilter(dateFilter);
-    }, [dateFilter]);
-
-    const { data: stats, isLoading: statsLoading } = usePublicStats(
-        share_id ?? '',
-        {
-            from,
-            to,
-        },
-    );
-
-    const chartInterval = dateFilter === '24h' ? 'hour' : 'day';
-    const { data: chartData, isLoading: chartLoading } = usePublicChartData(
-        share_id ?? '',
-        {
-            from,
-            to,
-        },
-        chartInterval,
-    );
 
     if (isLoading) {
         return (
@@ -98,6 +73,15 @@ export function PublicSharePage() {
         return !!website.share_config[key];
     };
 
+    const features: TrafficFeatures = {
+        stats: isFeatureEnabled('stats'),
+        graph: isFeatureEnabled('graph'),
+        pages: isFeatureEnabled('pages'),
+        sources: isFeatureEnabled('sources'),
+        environment: isFeatureEnabled('environment'),
+        geography: isFeatureEnabled('geography'),
+    };
+
     return (
         <div className='min-h-screen bg-background/50'>
             {/* Header / Navbar equivalent strictly for public share */}
@@ -124,19 +108,11 @@ export function PublicSharePage() {
                             </p>
                         </div>
                     </div>
-                    {tab === 'overview' && (
-                        <div>
-                            <DateFilter
-                                value={dateFilter}
-                                onValueChange={setDateFilter}
-                            />
-                        </div>
-                    )}
                 </div>
             </div>
 
-            <div className='max-w-6xl mx-auto p-6 space-y-6 animate-in fade-in duration-500'>
-                {isFeatureEnabled('stats') && (
+            <div className='max-w-6xl mx-auto p-6 space-y-6'>
+                {features.stats && (
                     <div className='flex gap-4 border-b'>
                         {(['overview', 'realtime'] as const).map((t) => (
                             <button
@@ -155,162 +131,17 @@ export function PublicSharePage() {
                     </div>
                 )}
 
-                {tab === 'realtime' && isFeatureEnabled('stats') ? (
+                {tab === 'realtime' && features.stats ? (
                     <PublicRealtimePanel
                         shareId={share_id!}
-                        showPages={isFeatureEnabled('pages')}
-                        showCountries={isFeatureEnabled('geography')}
+                        showPages={features.pages}
+                        showCountries={features.geography}
                     />
                 ) : (
-                    <>
-                        {/* Stats Grid */}
-                        {isFeatureEnabled('stats') && (
-                            <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
-                                <Card>
-                                    <CardHeader className='pb-2'>
-                                        <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                            Pageviews
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {statsLoading ? (
-                                            <Skeleton className='h-8 w-24' />
-                                        ) : (
-                                            <div className='text-2xl font-bold'>
-                                                {stats?.pageviews ?? 0}
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader className='pb-2'>
-                                        <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                            Visitors
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {statsLoading ? (
-                                            <Skeleton className='h-8 w-24' />
-                                        ) : (
-                                            <div className='text-2xl font-bold'>
-                                                {stats?.visitors ?? 0}
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader className='pb-2'>
-                                        <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                            Bounce Rate
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {statsLoading ? (
-                                            <Skeleton className='h-8 w-24' />
-                                        ) : (
-                                            <div className='text-2xl font-bold'>
-                                                {(
-                                                    stats?.bounce_rate ?? 0
-                                                ).toFixed(1)}
-                                                %
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader className='pb-2'>
-                                        <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                            Avg. Duration
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {statsLoading ? (
-                                            <Skeleton className='h-8 w-24' />
-                                        ) : (
-                                            <div className='text-2xl font-bold'>
-                                                {stats?.avg_duration ?? 0}s
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        )}
-
-                        {/* Main Activity Chart */}
-                        {isFeatureEnabled('graph') && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Activity</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <AnalyticsChart
-                                        data={chartData ?? []}
-                                        isLoading={chartLoading}
-                                    />
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {isFeatureEnabled('geography') && (
-                            <PublicCountryMapCard
-                                shareId={share_id!}
-                                range={{ from, to }}
-                            />
-                        )}
-
-                        {/* Detailed Metrics Grid */}
-                        <div className='grid gap-6 md:grid-cols-2'>
-                            {isFeatureEnabled('pages') && (
-                                <PublicMetricsCard
-                                    title='Pages'
-                                    shareId={share_id!}
-                                    range={{ from, to }}
-                                    tabs={[{ label: 'Path', value: 'url' }]}
-                                />
-                            )}
-                            {isFeatureEnabled('sources') && (
-                                <PublicMetricsCard
-                                    title='Sources'
-                                    shareId={share_id!}
-                                    range={{ from, to }}
-                                    tabs={[
-                                        {
-                                            label: 'Referrers',
-                                            value: 'referrer',
-                                        },
-                                    ]}
-                                />
-                            )}
-                            {isFeatureEnabled('environment') && (
-                                <PublicMetricsCard
-                                    title='Environment'
-                                    shareId={share_id!}
-                                    range={{ from, to }}
-                                    tabs={[
-                                        { label: 'Browsers', value: 'browser' },
-                                        { label: 'OS', value: 'os' },
-                                        {
-                                            label: 'Devices',
-                                            value: 'device_type',
-                                        },
-                                    ]}
-                                />
-                            )}
-                            {isFeatureEnabled('geography') && (
-                                <PublicMetricsCard
-                                    title='Geography'
-                                    shareId={share_id!}
-                                    range={{ from, to }}
-                                    tabs={[
-                                        {
-                                            label: 'Countries',
-                                            value: 'country',
-                                        },
-                                    ]}
-                                />
-                            )}
-                        </div>
-                    </>
+                    <TrafficAnalytics
+                        scope={{ id: share_id!, shared: true }}
+                        features={features}
+                    />
                 )}
             </div>
         </div>

@@ -88,12 +88,19 @@ export interface ChartDataPoint {
     timestamp: string; // ISO 8601
     views: number;
     visitors: number;
+    /** Percent of the bucket's sessions with a single view. Absent on realtime points. */
+    bounce_rate?: number;
+    /** Average session length within the bucket, in seconds. Absent on realtime points. */
+    avg_duration?: number;
 }
 
 /** Metric breakdown row */
 export interface MetricData {
     value: string;
+    /** Raw events (views). */
     count: number;
+    /** Distinct sessions. */
+    visitors: number;
 }
 
 /** Distinct visitors per country (ISO 3166-1 alpha-2 in `value`). */
@@ -133,7 +140,8 @@ export type MetricType =
     | 'os'
     | 'device_type'
     | 'country'
-    | 'event_name';
+    | 'event_name'
+    | 'user_agent';
 
 /** A single telemetry event */
 export interface TelemetryEvent {
