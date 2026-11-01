@@ -120,7 +120,7 @@ export function TeamDetailPage() {
                                     ))}
                                 </div>
                             ) : members && members.length > 0 ? (
-                                <div className='rounded-md border'>
+                                <div className='overflow-x-auto rounded-md border [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3'>
                                     <table className='w-full text-sm'>
                                         <thead>
                                             <tr className='border-b bg-muted/50'>
@@ -130,11 +130,13 @@ export function TeamDetailPage() {
                                                 <th className='p-3 text-left font-medium'>
                                                     Role
                                                 </th>
-                                                <th className='p-3 text-left font-medium'>
+                                                <th className='hidden p-3 text-left font-medium md:table-cell'>
                                                     Joined
                                                 </th>
                                                 <th className='p-3 text-right font-medium'>
-                                                    Actions
+                                                    <span className='sr-only sm:not-sr-only'>
+                                                        Actions
+                                                    </span>
                                                 </th>
                                             </tr>
                                         </thead>
@@ -146,7 +148,7 @@ export function TeamDetailPage() {
                                                 >
                                                     <td className='p-3'>
                                                         <div className='flex items-center gap-3'>
-                                                            <div className='flex h-8 w-8 items-center justify-center rounded-full bg-muted'>
+                                                            <div className='hidden h-8 w-8 items-center justify-center rounded-full bg-muted sm:flex'>
                                                                 <span className='text-xs font-bold uppercase'>
                                                                     {member
                                                                         .user_name?.[0] ||
@@ -159,7 +161,7 @@ export function TeamDetailPage() {
                                                                     {member.user_name ||
                                                                         member.user_email}
                                                                 </p>
-                                                                <p className='text-xs text-muted-foreground'>
+                                                                <p className='break-all text-xs text-muted-foreground'>
                                                                     {
                                                                         member.user_email
                                                                     }
@@ -175,7 +177,7 @@ export function TeamDetailPage() {
                                                             {member.role}
                                                         </Badge>
                                                     </td>
-                                                    <td className='p-3 text-muted-foreground text-xs'>
+                                                    <td className='hidden p-3 text-muted-foreground text-xs md:table-cell'>
                                                         {format(
                                                             parseISO(
                                                                 member.joined_at,
@@ -261,7 +263,7 @@ export function TeamDetailPage() {
                                     ))}
                                 </div>
                             ) : websites && websites.length > 0 ? (
-                                <div className='rounded-md border'>
+                                <div className='overflow-x-auto rounded-md border [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3'>
                                     <table className='w-full text-sm'>
                                         <thead>
                                             <tr className='border-b bg-muted/50'>

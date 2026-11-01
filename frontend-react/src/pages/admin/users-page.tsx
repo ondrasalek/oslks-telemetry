@@ -113,7 +113,7 @@ export function AdminUsersPage() {
                             ))}
                         </div>
                     ) : users && users.length > 0 ? (
-                        <div className='rounded-md border'>
+                        <div className='overflow-x-auto rounded-md border [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3'>
                             <table className='w-full text-sm'>
                                 <thead>
                                     <tr className='border-b bg-muted/50'>
@@ -123,11 +123,13 @@ export function AdminUsersPage() {
                                         <th className='p-3 text-left font-medium'>
                                             Role
                                         </th>
-                                        <th className='p-3 text-left font-medium'>
+                                        <th className='hidden p-3 text-left font-medium md:table-cell'>
                                             Created
                                         </th>
                                         <th className='p-3 text-right font-medium'>
-                                            Actions
+                                            <span className='sr-only sm:not-sr-only'>
+                                                Actions
+                                            </span>
                                         </th>
                                     </tr>
                                 </thead>
@@ -139,7 +141,7 @@ export function AdminUsersPage() {
                                         >
                                             <td className='p-3'>
                                                 <div className='flex items-center gap-2'>
-                                                    <div className='flex h-8 w-8 items-center justify-center rounded-full bg-muted'>
+                                                    <div className='hidden h-8 w-8 items-center justify-center rounded-full bg-muted sm:flex'>
                                                         <UserIcon className='h-4 w-4' />
                                                     </div>
                                                     <div>
@@ -147,7 +149,7 @@ export function AdminUsersPage() {
                                                             {user.name ||
                                                                 'No Name'}
                                                         </p>
-                                                        <p className='text-xs text-muted-foreground'>
+                                                        <p className='break-all text-xs text-muted-foreground'>
                                                             {user.email}
                                                         </p>
                                                     </div>
@@ -165,7 +167,7 @@ export function AdminUsersPage() {
                                                     {user.role}
                                                 </Badge>
                                             </td>
-                                            <td className='p-3 text-muted-foreground'>
+                                            <td className='hidden p-3 text-muted-foreground md:table-cell'>
                                                 {format(
                                                     parseISO(user.created_at),
                                                     'MMM d, yyyy',

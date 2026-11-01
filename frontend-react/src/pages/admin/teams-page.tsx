@@ -113,7 +113,7 @@ export function AdminTeamsPage() {
                             ))}
                         </div>
                     ) : teams && teams.length > 0 ? (
-                        <div className='rounded-md border'>
+                        <div className='overflow-x-auto rounded-md border [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3'>
                             <table className='w-full text-sm'>
                                 <thead>
                                     <tr className='border-b bg-muted/50'>
@@ -123,11 +123,13 @@ export function AdminTeamsPage() {
                                         <th className='p-3 text-left font-medium'>
                                             Members
                                         </th>
-                                        <th className='p-3 text-left font-medium'>
+                                        <th className='hidden p-3 text-left font-medium md:table-cell'>
                                             Created
                                         </th>
                                         <th className='p-3 text-right font-medium'>
-                                            Actions
+                                            <span className='sr-only sm:not-sr-only'>
+                                                Actions
+                                            </span>
                                         </th>
                                     </tr>
                                 </thead>
@@ -161,7 +163,7 @@ export function AdminTeamsPage() {
                                                     {team.member_count}
                                                 </div>
                                             </td>
-                                            <td className='p-3 text-muted-foreground'>
+                                            <td className='hidden p-3 text-muted-foreground md:table-cell'>
                                                 {format(
                                                     parseISO(team.created_at),
                                                     'MMM d, yyyy',

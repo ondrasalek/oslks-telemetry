@@ -112,24 +112,26 @@ export function AdminWebsitesPage() {
                             ))}
                         </div>
                     ) : websites && websites.length > 0 ? (
-                        <div className='rounded-md border'>
+                        <div className='overflow-x-auto rounded-md border [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3'>
                             <table className='w-full text-sm'>
                                 <thead>
                                     <tr className='border-b bg-muted/50'>
                                         <th className='p-3 text-left font-medium'>
                                             Website
                                         </th>
-                                        <th className='p-3 text-left font-medium'>
+                                        <th className='hidden p-3 text-left font-medium sm:table-cell'>
                                             Team
                                         </th>
-                                        <th className='p-3 text-left font-medium'>
+                                        <th className='hidden p-3 text-left font-medium sm:table-cell'>
                                             Status
                                         </th>
-                                        <th className='p-3 text-left font-medium'>
+                                        <th className='hidden p-3 text-left font-medium md:table-cell'>
                                             Created
                                         </th>
                                         <th className='p-3 text-right font-medium'>
-                                            Actions
+                                            <span className='sr-only sm:not-sr-only'>
+                                                Actions
+                                            </span>
                                         </th>
                                     </tr>
                                 </thead>
@@ -141,7 +143,7 @@ export function AdminWebsitesPage() {
                                         >
                                             <td className='p-3'>
                                                 <div className='flex items-center gap-2'>
-                                                    <div className='flex h-8 w-8 items-center justify-center rounded bg-primary/10 text-primary'>
+                                                    <div className='hidden h-8 w-8 items-center justify-center rounded bg-primary/10 text-primary sm:flex'>
                                                         <Globe className='h-4 w-4' />
                                                     </div>
                                                     <div>
@@ -155,16 +157,27 @@ export function AdminWebsitesPage() {
                                                         <p className='text-xs text-muted-foreground'>
                                                             {site.domain}
                                                         </p>
+                                                        <p className='text-xs text-muted-foreground sm:hidden'>
+                                                            {site.team_name ?? '—'}
+                                                        </p>
+                                                        <div className='mt-1 flex flex-wrap gap-1 sm:hidden'>
+                                                            <TrackerBadge lastEventAt={site.last_event_at} />
+                                                            {site.share_id && (
+                                                                <Badge variant='outline'>
+                                                                    shared
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     {site.is_pinned && (
                                                         <Pin className='h-3 w-3 text-yellow-500' />
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className='p-3 text-muted-foreground'>
+                                            <td className='hidden p-3 text-muted-foreground sm:table-cell'>
                                                 {site.team_name ?? '—'}
                                             </td>
-                                            <td className='p-3'>
+                                            <td className='hidden p-3 sm:table-cell'>
                                                 <TrackerBadge lastEventAt={site.last_event_at} />
                                                 {site.share_id && (
                                                     <Badge
@@ -175,7 +188,7 @@ export function AdminWebsitesPage() {
                                                     </Badge>
                                                 )}
                                             </td>
-                                            <td className='p-3 text-muted-foreground'>
+                                            <td className='hidden p-3 text-muted-foreground md:table-cell'>
                                                 {format(
                                                     parseISO(site.created_at),
                                                     'MMM d, yyyy',
