@@ -8,6 +8,7 @@ import {
     Lock,
     ArrowRight,
 } from 'lucide-react';
+import { lazy, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { Radar } from '@/components/radar';
 import {
@@ -17,6 +18,24 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import type { GlobePoint } from '@/components/analytics/globe';
+
+// Decoration only: loaded after first paint so it stays out of the landing bundle.
+const HeroGlobe = lazy(() => import('@/components/analytics/globe'));
+
+/** Where the hero globe pulses; `visitors` just varies the dot sizes. */
+const HERO_POINTS: GlobePoint[] = [
+    { lat: 50.08, lng: 14.44, visitors: 90 }, // Prague
+    { lat: 51.51, lng: -0.13, visitors: 70 }, // London
+    { lat: 40.71, lng: -74.01, visitors: 80 }, // New York
+    { lat: 37.77, lng: -122.42, visitors: 55 }, // San Francisco
+    { lat: -23.55, lng: -46.63, visitors: 45 }, // São Paulo
+    { lat: -33.93, lng: 18.42, visitors: 35 }, // Cape Town
+    { lat: 19.08, lng: 72.88, visitors: 60 }, // Mumbai
+    { lat: 35.68, lng: 139.69, visitors: 75 }, // Tokyo
+    { lat: -33.87, lng: 151.21, visitors: 40 }, // Sydney
+    { lat: 1.35, lng: 103.82, visitors: 50 }, // Singapore
+];
 
 export function HomePage() {
     return (
@@ -59,6 +78,16 @@ export function HomePage() {
                     <div className='absolute left-1/2 top-0 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-primary/5 blur-3xl' />
                     <div className='absolute right-0 top-1/4 h-[300px] w-[400px] rounded-full bg-chart-1/5 blur-3xl' />
                     <div className='absolute bottom-0 left-0 h-[300px] w-[400px] rounded-full bg-chart-2/5 blur-3xl' />
+
+                    {/* Slowly turning globe; the radar sweeps over it */}
+                    <Suspense fallback={null}>
+                        <HeroGlobe
+                            ambient
+                            points={HERO_POINTS}
+                            // Fades toward the middle so the headline stays legible over it.
+                            className='absolute left-1/2 top-1/2 size-[380px] -translate-x-1/2 -translate-y-1/2 [mask-image:radial-gradient(circle,rgba(0,0,0,0.35)_0%,black_75%)] sm:size-[520px] md:size-[640px]'
+                        />
+                    </Suspense>
 
                     {/* Radar Animation */}
                     <Radar className='absolute top-1/2 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 opacity-30 sm:h-[800px] sm:w-[800px] md:h-[1000px] md:w-[1000px]' />

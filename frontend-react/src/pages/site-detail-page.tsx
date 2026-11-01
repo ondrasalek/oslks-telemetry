@@ -1,6 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import React from 'react';
 import {
     useWebsite,
@@ -10,7 +9,6 @@ import {
     useResetWebsiteData,
     useTransferWebsite,
 } from '@/hooks/use-websites';
-import { useStats, useChartData } from '@/hooks/use-analytics';
 import { useTeams } from '@/hooks/use-teams';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,12 +31,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { AnalyticsChart } from '@/components/analytics/analytics-chart';
-import { MetricsCard } from '@/components/analytics/metrics-card';
-import { CountryMapCard } from '@/components/analytics/country-map-card';
+import { TrafficAnalytics } from '@/components/analytics/traffic-analytics';
 import { RealtimePanel } from '@/components/analytics/realtime-panel';
-import { DateFilter } from '@/components/analytics/date-filter';
-import { getDateRangeFromFilter } from '@/lib/dates';
 import {
     Share2,
     Edit,
@@ -50,16 +44,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Website } from '@/types/api';
-
-function formatDuration(seconds: number) {
-    if (!seconds) return '0s';
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
-    if (mins > 0) return `${mins}m ${secs}s`;
-    return `${secs}s`;
-}
 
 export function SiteDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -76,27 +60,8 @@ export function SiteDetailPage() {
     const [integrationTab, setIntegrationTab] = useState<
         'html' | 'react' | 'nextjs'
     >('html');
-    const [dateFilter, setDateFilter] = useState<string>('7d');
     const deleteWebsite = useDeleteWebsite();
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
-
-    const { from, to } = useMemo(() => {
-        return getDateRangeFromFilter(dateFilter);
-    }, [dateFilter]);
-    const { data: stats, isLoading: statsLoading } = useStats(id ?? '', {
-        from,
-        to,
-    });
-    const chartInterval = dateFilter === '24h' ? 'hour' : 'day';
-    const { data: chartData, isLoading: chartLoading } = useChartData(
-        id ?? '',
-        {
-            from,
-            to,
-        },
-        chartInterval,
-    );
 
     if (isLoading || (isFetching && !website)) {
         return (
@@ -202,148 +167,10 @@ export function SiteDetailPage() {
                         Settings
                     </button>
                 </div>
-                {activeTab === 'overview' && (
-                    <div className='flex items-center gap-2'>
-                        <Button
-                            variant='outline'
-                            size='icon'
-                            onClick={() =>
-                                queryClient.invalidateQueries({
-                                    queryKey: ['analytics'],
-                                })
-                            }
-                            title='Refresh Data'
-                        >
-                            <RefreshCcw size={16} />
-                        </Button>
-                        <DateFilter
-                            value={dateFilter}
-                            onValueChange={setDateFilter}
-                        />
-                    </div>
-                )}
             </div>
 
             {activeTab === 'overview' ? (
-                <div className='space-y-6 animate-in fade-in duration-500'>
-                    <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
-                        <Card>
-                            <CardHeader className='pb-2'>
-                                <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                    Pageviews
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {statsLoading ? (
-                                    <Skeleton className='h-8 w-24' />
-                                ) : (
-                                    <div className='text-2xl font-bold'>
-                                        {stats?.pageviews ?? 0}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className='pb-2'>
-                                <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                    Visitors
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {statsLoading ? (
-                                    <Skeleton className='h-8 w-24' />
-                                ) : (
-                                    <div className='text-2xl font-bold'>
-                                        {stats?.visitors ?? 0}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className='pb-2'>
-                                <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                    Bounce Rate
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {statsLoading ? (
-                                    <Skeleton className='h-8 w-24' />
-                                ) : (
-                                    <div className='text-2xl font-bold'>
-                                        {(stats?.bounce_rate ?? 0).toFixed(1)}%
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className='pb-2'>
-                                <CardTitle className='text-sm font-medium text-muted-foreground'>
-                                    Avg. Duration
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {statsLoading ? (
-                                    <Skeleton className='h-8 w-24' />
-                                ) : (
-                                    <div className='text-2xl font-bold'>
-                                        {formatDuration(
-                                            Number(stats?.avg_duration || 0),
-                                        )}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Activity</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <AnalyticsChart
-                                data={chartData ?? []}
-                                isLoading={chartLoading}
-                            />
-                        </CardContent>
-                    </Card>
-
-                    <CountryMapCard
-                        websiteId={website.id}
-                        range={{ from, to }}
-                    />
-
-                    {/* Detailed Metrics Grid */}
-                    <div className='grid gap-6 md:grid-cols-2'>
-                        <MetricsCard
-                            title='Pages'
-                            websiteId={website.id}
-                            range={{ from, to }}
-                            tabs={[{ label: 'Path', value: 'url' }]}
-                        />
-                        <MetricsCard
-                            title='Sources'
-                            websiteId={website.id}
-                            range={{ from, to }}
-                            tabs={[{ label: 'Referrers', value: 'referrer' }]}
-                        />
-                        <MetricsCard
-                            title='Environment'
-                            websiteId={website.id}
-                            range={{ from, to }}
-                            tabs={[
-                                { label: 'Browsers', value: 'browser' },
-                                { label: 'OS', value: 'os' },
-                                { label: 'Devices', value: 'device_type' },
-                            ]}
-                        />
-                        <MetricsCard
-                            title='Location'
-                            websiteId={website.id}
-                            range={{ from, to }}
-                            tabs={[{ label: 'Countries', value: 'country' }]}
-                        />
-                    </div>
-                </div>
+                <TrafficAnalytics scope={{ id: website.id }} />
             ) : activeTab === 'realtime' ? (
                 <RealtimePanel websiteId={website.id} />
             ) : (

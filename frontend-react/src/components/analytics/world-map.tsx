@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { geoNaturalEarth1, geoPath } from 'd3-geo';
-import { feature } from 'topojson-client';
 import { alpha2ToNumeric } from 'i18n-iso-countries';
-import type { Feature, FeatureCollection, Geometry } from 'geojson';
-import type { Topology, GeometryCollection } from 'topojson-specification';
 import type { CityStat } from '@/types/api';
 import { countryName } from '@/lib/countries';
-import worldUrl from 'world-atlas/countries-110m.json?url';
+import { ANTARCTICA, loadWorld, type CountryFeature } from '@/lib/world';
 
 interface WorldMapProps {
     /** ISO alpha-2 country code -> visitors. */
@@ -17,31 +14,8 @@ interface WorldMapProps {
     pulses?: { id: number; lat: number; lng: number }[];
 }
 
-type CountryFeature = Feature<Geometry, { name: string }>;
-
 const WIDTH = 960;
 const HEIGHT = 480;
-const ANTARCTICA = '010';
-
-// The topology is static, so share one fetch across every map instance.
-let worldPromise: Promise<CountryFeature[]> | null = null;
-const loadWorld = (): Promise<CountryFeature[]> =>
-    (worldPromise ??= fetch(worldUrl)
-        .then((r) => r.json() as Promise<Topology>)
-        .then((topology) => {
-            const countries = topology.objects.countries as GeometryCollection<{
-                name: string;
-            }>;
-            const collection = feature(
-                topology,
-                countries,
-            ) as FeatureCollection<Geometry, { name: string }>;
-            return collection.features.filter((f) => f.id !== ANTARCTICA);
-        })
-        .catch((error) => {
-            worldPromise = null; // allow a retry on the next mount
-            throw error;
-        }));
 
 const projection = geoNaturalEarth1().fitExtent(
     [
@@ -67,7 +41,11 @@ export default function WorldMap({
     useEffect(() => {
         let cancelled = false;
         loadWorld()
-            .then((f) => !cancelled && setFeatures(f))
+            .then(
+                (all) =>
+                    !cancelled &&
+                    setFeatures(all.filter((f) => f.id !== ANTARCTICA)),
+            )
             .catch(() => !cancelled && setFailed(true));
         return () => {
             cancelled = true;
@@ -144,7 +122,7 @@ export default function WorldMap({
                     const visitors = byId.get(id) ?? 0;
                     return (
                         <path
-                            key={id}
+                            key={f.properties.name}
                             d={pathFor(f) ?? undefined}
                             style={{ fill: fillFor(visitors) }}
                             className='stroke-background transition-colors hover:opacity-80'

@@ -1,6 +1,79 @@
 import sql from '../lib/db.js';
 import { isSuperuserSession } from '../lib/access.js';
 import { openLiveStream } from '../lib/live.js';
+/** Columns the generic /metrics breakdown may group by (interpolated as identifiers, so keep it a whitelist). */
+const METRIC_COLUMNS = [
+    'url',
+    'referrer',
+    'os',
+    'browser',
+    'device_type',
+    'country',
+    'event_name',
+    'user_agent',
+];
+/**
+ * Top values of one event column. `count` is raw events (views); `visitors` is distinct
+ * sessions, so a table can show both.
+ */
+const queryMetrics = (websiteId, column, limit, startAt, endAt) => sql `
+    SELECT COALESCE(${sql(column)}, 'Unknown') AS value,
+           COUNT(*)::int AS count,
+           COUNT(DISTINCT session_id)::int AS visitors
+    FROM events
+    WHERE website_id = ${websiteId}::uuid
+      AND (${startAt || null}::timestamptz IS NULL OR created_at >= ${startAt || null}::timestamptz)
+      AND (${endAt || null}::timestamptz IS NULL OR created_at <= ${endAt || null}::timestamptz)
+    GROUP BY ${sql(column)}
+    ORDER BY count DESC
+    LIMIT ${limit}
+`;
+const chartInterval = (interval) => interval === 'minute' || interval === 'hour' || interval === 'month'
+    ? interval
+    : 'day';
+/**
+ * IANA zone the chart buckets are cut in. Without one, UTC: otherwise day
+ * boundaries would follow whatever timezone the database server happens to run in.
+ */
+const chartZone = (tz) => {
+    if (typeof tz !== 'string' || !tz)
+        return 'UTC';
+    try {
+        new Intl.DateTimeFormat('en', { timeZone: tz });
+        return tz;
+    }
+    catch {
+        return 'UTC';
+    }
+};
+/**
+ * Views and visitors per time bucket. Bounce rate and average session length are
+ * computed per bucket from the sessions seen in it, which is what the overview
+ * sparklines plot; a session spanning two buckets counts in both.
+ */
+const queryChart = (websiteId, interval, zone, startAt, endAt) => sql `
+    SELECT bucket AS timestamp,
+           COUNT(*)::int AS visitors,
+           SUM(views)::int AS views,
+           COALESCE(
+               SUM(CASE WHEN views = 1 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) * 100,
+               0
+           )::float AS bounce_rate,
+           COALESCE(AVG(EXTRACT(EPOCH FROM duration)), 0)::float AS avg_duration
+    FROM (
+        SELECT date_trunc(${interval}, created_at, ${zone}) AS bucket,
+               session_id,
+               COUNT(*) AS views,
+               MAX(created_at) - MIN(created_at) AS duration
+        FROM events
+        WHERE website_id = ${websiteId}::uuid
+          AND (${startAt || null}::timestamptz IS NULL OR created_at >= ${startAt || null}::timestamptz)
+          AND (${endAt || null}::timestamptz IS NULL OR created_at <= ${endAt || null}::timestamptz)
+        GROUP BY bucket, session_id
+    ) AS per_session
+    GROUP BY bucket
+    ORDER BY bucket ASC
+`;
 export const getStats = async (req, res) => {
     const { website_id } = req.params;
     const { start_at, end_at, url, referrer, os, browser, device, country, event_name, } = req.query;
@@ -68,16 +141,7 @@ export const getMetrics = async (req, res) => {
     const userId = req.session.userId;
     if (!userId)
         return res.status(401).json({ error: 'Unauthorized' });
-    const allowedColumns = [
-        'url',
-        'referrer',
-        'os',
-        'browser',
-        'device_type',
-        'country',
-        'event_name',
-    ];
-    if (!allowedColumns.includes(metric_type)) {
+    if (!METRIC_COLUMNS.includes(metric_type)) {
         return res.status(400).json({ error: 'Invalid metric type' });
     }
     try {
@@ -91,20 +155,7 @@ export const getMetrics = async (req, res) => {
         `;
         if (websitesData.length === 0)
             return res.status(404).json({ error: 'Website not found' });
-        const col = metric_type;
-        const metrics = await sql `
-            SELECT 
-                COALESCE(${sql(col)}, 'Unknown') as value,
-                COUNT(*)::int as count
-            FROM events
-            WHERE website_id = ${website_id}
-              AND (${start_at || null}::timestamptz IS NULL OR created_at >= ${start_at || null}::timestamptz)
-              AND (${end_at || null}::timestamptz IS NULL OR created_at <= ${end_at || null}::timestamptz)
-            GROUP BY ${sql(col)}
-            ORDER BY count DESC
-            LIMIT ${parseInt(limit) || 10}
-        `;
-        res.json(metrics);
+        res.json(await queryMetrics(website_id, metric_type, parseInt(limit) || 10, start_at, end_at));
     }
     catch (error) {
         console.error('Metrics error:', error);
@@ -292,7 +343,7 @@ export const getRealtime = async (req, res) => {
 };
 export const getChartData = async (req, res) => {
     const { website_id } = req.params;
-    const { start_at, end_at, interval } = req.query;
+    const { start_at, end_at, interval, tz } = req.query;
     const userId = req.session.userId;
     if (!userId)
         return res.status(401).json({ error: 'Unauthorized' });
@@ -307,26 +358,7 @@ export const getChartData = async (req, res) => {
         `;
         if (websitesData.length === 0)
             return res.status(404).json({ error: 'Website not found' });
-        const intervalSql = interval === 'minute'
-            ? 'minute'
-            : interval === 'hour'
-                ? 'hour'
-                : interval === 'month'
-                    ? 'month'
-                    : 'day';
-        const chart_data = await sql `
-            SELECT 
-                date_trunc(${intervalSql}, created_at) as timestamp,
-                COUNT(DISTINCT session_id)::int as visitors,
-                COUNT(*)::int as views
-            FROM events
-            WHERE website_id = ${website_id}
-              AND (${start_at || null}::timestamptz IS NULL OR created_at >= ${start_at || null}::timestamptz)
-              AND (${end_at || null}::timestamptz IS NULL OR created_at <= ${end_at || null}::timestamptz)
-            GROUP BY timestamp
-            ORDER BY timestamp ASC
-        `;
-        res.json(chart_data);
+        res.json(await queryChart(website_id, chartInterval(interval), chartZone(tz), start_at, end_at));
     }
     catch (error) {
         console.error('Chart data error:', error);
@@ -440,16 +472,7 @@ export const getSharedStats = async (req, res) => {
 export const getSharedMetrics = async (req, res) => {
     const { share_id } = req.params;
     const { metric_type, limit, start_at, end_at } = req.query;
-    const allowedColumns = [
-        'url',
-        'referrer',
-        'os',
-        'browser',
-        'device_type',
-        'country',
-        'event_name',
-    ];
-    if (!allowedColumns.includes(metric_type)) {
+    if (!METRIC_COLUMNS.includes(metric_type)) {
         return res.status(400).json({ error: 'Invalid metric type' });
     }
     try {
@@ -460,7 +483,7 @@ export const getSharedMetrics = async (req, res) => {
             ? 'pages'
             : metric_type === 'referrer'
                 ? 'sources'
-                : ['os', 'browser', 'device_type'].includes(metric_type)
+                : ['os', 'browser', 'device_type', 'user_agent'].includes(metric_type)
                     ? 'environment'
                     : metric_type === 'country'
                         ? 'geography'
@@ -468,20 +491,7 @@ export const getSharedMetrics = async (req, res) => {
         if (!isSharedFeatureEnabled(website.share_config, feature)) {
             return res.status(403).json({ error: 'Feature disabled' });
         }
-        const col = metric_type;
-        const metrics = await sql `
-            SELECT 
-                COALESCE(${sql(col)}, 'Unknown') as value,
-                COUNT(*)::int as count
-            FROM events
-            WHERE website_id = ${website.id}::uuid
-              AND (${start_at || null}::timestamptz IS NULL OR created_at >= ${start_at || null}::timestamptz)
-              AND (${end_at || null}::timestamptz IS NULL OR created_at <= ${end_at || null}::timestamptz)
-            GROUP BY ${sql(col)}
-            ORDER BY count DESC
-            LIMIT ${parseInt(limit) || 10}
-        `;
-        res.json(metrics);
+        res.json(await queryMetrics(website.id, metric_type, parseInt(limit) || 10, start_at, end_at));
     }
     catch (error) {
         console.error('Shared metrics error:', error);
@@ -490,7 +500,7 @@ export const getSharedMetrics = async (req, res) => {
 };
 export const getSharedChartData = async (req, res) => {
     const { share_id } = req.params;
-    const { start_at, end_at, interval } = req.query;
+    const { start_at, end_at, interval, tz } = req.query;
     try {
         const website = await getSharedWebsiteInfo(share_id);
         if (!website)
@@ -498,26 +508,7 @@ export const getSharedChartData = async (req, res) => {
         if (!isSharedFeatureEnabled(website.share_config, 'graph')) {
             return res.status(403).json({ error: 'Feature disabled' });
         }
-        const intervalSql = interval === 'minute'
-            ? 'minute'
-            : interval === 'hour'
-                ? 'hour'
-                : interval === 'month'
-                    ? 'month'
-                    : 'day';
-        const chart_data = await sql `
-            SELECT 
-                date_trunc(${intervalSql}, created_at) as timestamp,
-                COUNT(DISTINCT session_id)::int as visitors,
-                COUNT(*)::int as views
-            FROM events
-            WHERE website_id = ${website.id}::uuid
-              AND (${start_at || null}::timestamptz IS NULL OR created_at >= ${start_at || null}::timestamptz)
-              AND (${end_at || null}::timestamptz IS NULL OR created_at <= ${end_at || null}::timestamptz)
-            GROUP BY timestamp
-            ORDER BY timestamp ASC
-        `;
-        res.json(chart_data);
+        res.json(await queryChart(website.id, chartInterval(interval), chartZone(tz), start_at, end_at));
     }
     catch (error) {
         console.error('Shared chart data error:', error);

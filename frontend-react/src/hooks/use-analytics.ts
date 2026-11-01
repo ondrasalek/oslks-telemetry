@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
+import { browserTimeZone } from '@/lib/dates';
 import type {
     Stats,
     ChartDataPoint,
@@ -11,92 +12,106 @@ import type {
     RealtimeData,
 } from '@/types/api';
 
+// ── Scope ────────────────────────────────────────────────
+
+/** What a query reads from: a website the user can open, or a public share link. */
+export interface AnalyticsScope {
+    id: string;
+    shared?: boolean;
+}
+
+const scopePath = ({ id, shared }: AnalyticsScope) =>
+    shared ? `/api/analytics/shared/${id}` : `/api/analytics/${id}`;
+
 // ── Query Keys ───────────────────────────────────────────
 export const analyticsKeys = {
-    stats: (websiteId: string, range: DateRange) =>
-        ['analytics', 'stats', websiteId, range] as const,
-    chart: (websiteId: string, range: DateRange) =>
-        ['analytics', 'chart', websiteId, range] as const,
-    metrics: (websiteId: string, type: MetricType, range: DateRange) =>
-        ['analytics', 'metrics', websiteId, type, range] as const,
     activeVisitors: (websiteId: string) =>
         ['analytics', 'active', websiteId] as const,
     teamStats: (teamId: string, range: DateRange) =>
         ['analytics', 'team-stats', teamId, range] as const,
-
-    // Public keys
-    publicStats: (shareId: string, range: DateRange) =>
-        ['analytics', 'public', 'stats', shareId, range] as const,
-    publicChart: (shareId: string, range: DateRange) =>
-        ['analytics', 'public', 'chart', shareId, range] as const,
-    publicMetrics: (shareId: string, type: MetricType, range: DateRange) =>
-        ['analytics', 'public', 'metrics', shareId, type, range] as const,
     publicActiveVisitors: (shareId: string) =>
         ['analytics', 'public', 'active', shareId] as const,
 };
 
 // ── Queries ──────────────────────────────────────────────
 
-/** Fetch aggregated stats for a website within a date range. */
-export function useStats(websiteId: string, range: DateRange) {
-    return useQuery<Stats>({
-        queryKey: analyticsKeys.stats(websiteId, range),
+/**
+ * One GET against a website's (or share link's) analytics, filtered by date range.
+ * The previous result stays on screen while a new range loads, so a refresh or a
+ * range change dims the cards instead of flashing them back to skeletons.
+ */
+function useScopedQuery<T>(
+    scope: AnalyticsScope,
+    endpoint: 'stats' | 'chart' | 'metrics' | 'countries' | 'cities',
+    range: DateRange,
+    params: Record<string, string> = {},
+    enabled = true,
+) {
+    return useQuery<T>({
+        queryKey: [
+            'analytics',
+            endpoint,
+            scope.shared ? 'public' : 'site',
+            scope.id,
+            range,
+            params,
+        ] as const,
         queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            const { data } = await apiClient.get<Stats>(
-                `/api/analytics/${websiteId}/stats?${params.toString()}`,
+            const search = new URLSearchParams(params);
+            if (range.from) search.set('start_at', range.from);
+            if (range.to) search.set('end_at', range.to);
+            const { data } = await apiClient.get<T>(
+                `${scopePath(scope)}/${endpoint}?${search.toString()}`,
             );
             return data;
         },
-        enabled: !!websiteId,
+        enabled: !!scope.id && enabled,
+        placeholderData: keepPreviousData,
     });
 }
 
-/** Fetch time-series chart data for a website. */
+/** Aggregated stats within a date range. */
+export function useStats(scope: AnalyticsScope, range: DateRange, enabled = true) {
+    return useScopedQuery<Stats>(scope, 'stats', range, {}, enabled);
+}
+
+/** Time-series chart data (views, visitors, per-bucket bounce rate and duration). */
 export function useChartData(
-    websiteId: string,
+    scope: AnalyticsScope,
     range: DateRange,
     interval: string = 'day',
+    enabled = true,
 ) {
-    return useQuery<ChartDataPoint[]>({
-        queryKey: [...analyticsKeys.chart(websiteId, range), interval],
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            params.append('interval', interval);
-            const { data } = await apiClient.get<ChartDataPoint[]>(
-                `/api/analytics/${websiteId}/chart?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!websiteId,
+    return useScopedQuery<ChartDataPoint[]>(
+        scope,
+        'chart',
+        range,
+        { interval, tz: browserTimeZone },
+        enabled,
+    );
+}
+
+/** Top values of one dimension (pages, referrers, browsers, ...). */
+export function useMetrics(
+    scope: AnalyticsScope,
+    metricType: MetricType,
+    range: DateRange,
+    limit = 10,
+) {
+    return useScopedQuery<MetricData[]>(scope, 'metrics', range, {
+        metric_type: metricType,
+        limit: String(limit),
     });
 }
 
-/** Fetch metric breakdown (top URLs, referrers, browsers, etc.). */
-export function useMetrics(
-    websiteId: string,
-    metricType: MetricType,
-    range: DateRange,
-) {
-    return useQuery<MetricData[]>({
-        queryKey: analyticsKeys.metrics(websiteId, metricType, range),
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            params.append('metric_type', metricType);
-            params.append('limit', '10');
-            const { data } = await apiClient.get<MetricData[]>(
-                `/api/analytics/${websiteId}/metrics?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!websiteId,
-    });
+/** Distinct visitors per country, for the map and the country list. */
+export function useCountryStats(scope: AnalyticsScope, range: DateRange) {
+    return useScopedQuery<CountryStat[]>(scope, 'countries', range);
+}
+
+/** Visitors per city, for the map dots and the city list. */
+export function useCityStats(scope: AnalyticsScope, range: DateRange) {
+    return useScopedQuery<CityStat[]>(scope, 'cities', range);
 }
 
 /** Fetch active visitors count (last 5 minutes). Auto-refreshes every 30s. */
@@ -111,40 +126,6 @@ export function useActiveVisitors(websiteId: string) {
         },
         enabled: !!websiteId,
         refetchInterval: 30_000,
-    });
-}
-
-/** Distinct visitors per country, for the map. */
-export function useCountryStats(websiteId: string, range: DateRange) {
-    return useQuery<CountryStat[]>({
-        queryKey: ['analytics', 'countries', websiteId, range] as const,
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            const { data } = await apiClient.get<CountryStat[]>(
-                `/api/analytics/${websiteId}/countries?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!websiteId,
-    });
-}
-
-/** Visitors per city, for the map dots. */
-export function useCityStats(websiteId: string, range: DateRange) {
-    return useQuery<CityStat[]>({
-        queryKey: ['analytics', 'cities', websiteId, range] as const,
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            const { data } = await apiClient.get<CityStat[]>(
-                `/api/analytics/${websiteId}/cities?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!websiteId,
     });
 }
 
@@ -182,79 +163,6 @@ export function useTeamStats(teamId: string, range: DateRange) {
 
 // ── Public Queries ───────────────────────────────────────
 
-/** Fetch public stats by share ID. */
-export function usePublicStats(shareId: string, range: DateRange) {
-    return useQuery<Stats>({
-        queryKey: analyticsKeys.publicStats(shareId, range),
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            const { data } = await apiClient.get<Stats>(
-                `/api/analytics/shared/${shareId}/stats?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!shareId,
-    });
-}
-
-/** Fetch public time-series chart data by share ID. */
-export function usePublicChartData(
-    shareId: string,
-    range: DateRange,
-    interval: string = 'day',
-) {
-    return useQuery<ChartDataPoint[]>({
-        queryKey: [...analyticsKeys.publicChart(shareId, range), interval],
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            params.append('interval', interval);
-            const { data } = await apiClient.get<ChartDataPoint[]>(
-                `/api/analytics/shared/${shareId}/chart?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!shareId,
-    });
-}
-
-/** Public distinct visitors per country by share ID. */
-export function usePublicCountryStats(shareId: string, range: DateRange) {
-    return useQuery<CountryStat[]>({
-        queryKey: ['analytics', 'public', 'countries', shareId, range] as const,
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            const { data } = await apiClient.get<CountryStat[]>(
-                `/api/analytics/shared/${shareId}/countries?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!shareId,
-    });
-}
-
-/** Public visitors per city by share ID. */
-export function usePublicCityStats(shareId: string, range: DateRange) {
-    return useQuery<CityStat[]>({
-        queryKey: ['analytics', 'public', 'cities', shareId, range] as const,
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            const { data } = await apiClient.get<CityStat[]>(
-                `/api/analytics/shared/${shareId}/cities?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!shareId,
-    });
-}
-
 /** Public last-30-minutes snapshot by share ID. Polls every 10s. */
 export function usePublicRealtime(shareId: string) {
     return useQuery<RealtimeData>({
@@ -267,29 +175,6 @@ export function usePublicRealtime(shareId: string) {
         },
         enabled: !!shareId,
         refetchInterval: 10_000,
-    });
-}
-
-/** Fetch public metric breakdown by share ID. */
-export function usePublicMetrics(
-    shareId: string,
-    metricType: MetricType,
-    range: DateRange,
-) {
-    return useQuery<MetricData[]>({
-        queryKey: analyticsKeys.publicMetrics(shareId, metricType, range),
-        queryFn: async () => {
-            const params = new URLSearchParams();
-            if (range.from) params.append('start_at', range.from);
-            if (range.to) params.append('end_at', range.to);
-            params.append('metric_type', metricType);
-            params.append('limit', '10');
-            const { data } = await apiClient.get<MetricData[]>(
-                `/api/analytics/shared/${shareId}/metrics?${params.toString()}`,
-            );
-            return data;
-        },
-        enabled: !!shareId,
     });
 }
 
